@@ -1,0 +1,35 @@
+"""One adapter for every app, so the harness never special-cases architecture.
+
+    target = get_target("rag_bot")
+    r = target("What is your return policy?")
+    r.text, r.retrieved_context, r.tool_calls
+"""
+from dataclasses import dataclass, field
+from typing import Callable
+
+TARGET_NAMES = ["chatbot", "rag_bot", "agent_bot"]
+
+
+@dataclass
+class TargetResponse:
+    text: str
+    retrieved_context: list[str] = field(default_factory=list)  # RAG only
+    tool_calls: list[dict] = field(default_factory=list)  # agent only
+
+
+def get_target(name: str) -> Callable[[str], TargetResponse]:
+    if name == "chatbot":
+        from apps.chatbot.app import respond
+
+        return lambda prompt: TargetResponse(text=respond(prompt))
+    raise ValueError(f"unknown or not-yet-built target {name!r}; choose from {TARGET_NAMES}")
+
+
+def deepteam_callback(name: str):
+    """Async model callback in the shape deepteam expects (text in, text out)."""
+    target = get_target(name)
+
+    async def callback(input: str) -> str:
+        return target(input).text
+
+    return callback

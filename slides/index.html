@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Don't Trust Your LLM — Slides</title>
+<style>
+:root{
+  --bg:#0f1420; --panel:#182032; --panel2:#212c44; --fg:#f4f6fb; --mute:#b3bdd3;
+  --wide:#4cc9f0; --deep:#ffb703; --lock:#7ae582; --bad:#ff6b6b; --open:#ff4fd8;
+  --line:#34425f;
+  --mono:ui-monospace,"JetBrains Mono","Fira Code",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","Noto Sans TC",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#000;color:var(--fg);font-family:var(--sans);overflow:hidden}
+#viewport{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+#stage{width:1280px;height:720px;position:relative;transform-origin:center center;flex:none}
+.slide{display:none;position:absolute;inset:0;background:var(--bg);padding:64px 80px 56px;flex-direction:column;overflow:hidden}
+.slide.on{display:flex}
+.sec{position:absolute;top:22px;left:80px;font-size:15px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.num{position:absolute;bottom:18px;right:28px;font-size:15px;color:var(--mute)}
+.tracker{position:absolute;top:16px;right:48px;display:flex;gap:6px;font-size:15px;font-weight:700}
+.tracker span{padding:4px 12px;border:2px solid var(--line);border-radius:999px;color:var(--mute)}
+.tracker span.cur{color:#0f1420}
+.tracker span.cur.wide{background:var(--wide);border-color:var(--wide)}
+.tracker span.cur.deep{background:var(--deep);border-color:var(--deep)}
+.tracker span.cur.locked{background:var(--lock);border-color:var(--lock)}
+.tracker span.cur::before{content:"● "}
+h1{font-size:68px;line-height:1.08}
+h2{font-size:52px;line-height:1.1;margin:14px 0 22px}
+h3{font-size:30px;margin-bottom:8px}
+p,li{font-size:30px;line-height:1.38}
+ul{padding-left:1.1em} li{margin:8px 0}
+.mute{color:var(--mute)} .big{font-size:40px} .sm{font-size:22px} .xs{font-size:18px}
+.center{align-items:center;justify-content:center;text-align:center}
+.row{display:flex;gap:28px} .row>*{flex:1}
+.col{display:flex;flex-direction:column;gap:14px}
+.card{background:var(--panel);border:2px solid var(--line);border-radius:14px;padding:20px 26px}
+.card.w{border-color:var(--wide)} .card.d{border-color:var(--deep)} .card.l{border-color:var(--lock)} .card.b{border-color:var(--bad)}
+code,pre{font-family:var(--mono)}
+pre{background:#080b12;border:2px solid var(--line);border-radius:12px;padding:20px 26px;font-size:30px;line-height:1.4;color:#e8ffe8;white-space:pre-wrap}
+code.i{background:var(--panel2);padding:2px 8px;border-radius:6px;font-size:.9em}
+.cmd{font-family:var(--mono);font-size:64px;background:#080b12;border:3px solid var(--line);border-radius:16px;padding:22px 40px;display:inline-block}
+.cmd::before{content:"$ ";color:var(--lock)}
+.tag{display:inline-block;font-size:18px;font-weight:700;padding:3px 12px;border-radius:999px;border:2px solid var(--line);color:var(--mute);margin-right:8px}
+.w .tag,.tag.w{border-color:var(--wide);color:var(--wide)} .tag.d{border-color:var(--deep);color:var(--deep)} .tag.l{border-color:var(--lock);color:var(--lock)}
+/* OPEN placeholders: dashed magenta + text label, never color alone */
+.open{border:3px dashed var(--open);background:rgba(255,79,216,.08);border-radius:14px;padding:18px 24px;color:#ffd0f4}
+.open b{color:var(--open);letter-spacing:.06em}
+.open.inline{display:inline-block;padding:2px 12px;font-size:.8em;border-width:2px}
+/* taxonomy template */
+.tx{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr;gap:18px 28px;flex:1}
+.tx .def{grid-column:1/3;font-size:34px}
+.tx .lbl{font-size:16px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);margin-bottom:6px}
+.bubble{background:var(--panel2);border-radius:12px;padding:10px 16px;margin:8px 0;font-size:24px}
+.bubble.u{border-left:6px solid var(--wide)} .bubble.a{border-left:6px solid var(--deep)}
+table{border-collapse:collapse;width:100%} th,td{border:2px solid var(--line);padding:12px 16px;font-size:24px;text-align:left;vertical-align:top}
+th{background:var(--panel2)}
+.arrow{font-size:44px;color:var(--mute);align-self:center;flex:none!important}
+.hid{display:none;position:absolute;top:20px;left:50%;transform:translateX(-50%);background:var(--open);color:#000;font-weight:800;padding:4px 16px;border-radius:999px;font-size:16px;z-index:3}
+.slide[data-hidden] .hid{display:block}
+.lane{display:flex;gap:12px;align-items:stretch}
+svg text{font-family:var(--sans)}
+/* notes panel */
+#notes{display:none;position:fixed;left:0;right:0;bottom:0;max-height:34vh;overflow:auto;background:#0b0e17f2;border-top:3px solid var(--deep);padding:14px 28px;font-size:18px;line-height:1.45;z-index:10}
+#notes.on{display:block} #notes .t{color:var(--deep);font-weight:700;margin-right:10px}
+.notes{display:none}
+#help{position:fixed;left:12px;bottom:8px;font-size:13px;color:#7c88a6;z-index:9}
+/* overview */
+body.ov #viewport{display:none}
+#grid{display:none;position:fixed;inset:0;overflow:auto;background:#05070c;padding:20px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;z-index:8}
+body.ov #grid{display:grid}
+#grid div{background:var(--panel);border:2px solid var(--line);border-radius:10px;padding:12px;cursor:pointer;font-size:15px;min-height:90px}
+#grid div:hover{border-color:var(--deep)} #grid b{display:block;color:var(--deep);margin-bottom:4px}
+#grid .h{opacity:.6;border-style:dashed}
+/* print = PDF export (Ctrl+P, "Save as PDF", landscape, no margins) */
+@media print{
+  @page{size:1280px 720px;margin:0}
+  html,body{overflow:visible;height:auto;background:#fff}
+  #viewport{position:static;display:block}
+  #stage{transform:none!important;width:1280px;height:auto}
+  .slide{display:flex!important;position:relative;width:1280px;height:720px;page-break-after:always;break-after:page;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #notes,#help,#grid{display:none!important}
+}
+</style>
+</head>
+<body>
+<div id="viewport"><div id="stage">
+
+<!-- ============ SECTION 1: WHY EVALS ALONE AREN'T ENOUGH (0-4) ============ -->
+
+<section class="slide center" data-sec="Intro">
+  <h1>Don't Trust Your LLM</h1>
+  <p class="big mute" style="margin:14px 0 30px">Engineering-style AI red-teaming for Python developers</p>
+  <p class="open inline"><b>[OPEN]</b> Final title · speaker name, title, employer · @handle · date / room</p>
+  <p class="sm mute" style="margin-top:26px">PyCon Taiwan · repo: <span class="open inline"><b>[OPEN]</b> repo URL + QR</span></p>
+  <div class="notes"><span class="t">0:00 · 0.5 min</span>Welcome. Say who you are in one sentence. Promise: a method and a repo you can run tomorrow. No security background needed. Confirm the final title and add speaker details before the talk.</div>
+</section>
+
+<section class="slide" data-sec="1 · Why evals aren't enough">
+  <h2>A real finding</h2>
+  <div class="row" style="flex:1">
+    <div class="open col" style="justify-content:center">
+      <b>[OPEN] INSERT REAL FINDING</b>
+      <p class="sm">Redacted transcript or screenshot of one anonymized vulnerability from a production RAG pipeline or chatbot.</p>
+      <p class="xs">Do not use real customer data, credentials, or employer content.</p>
+    </div>
+    <div class="open col" style="justify-content:center">
+      <b>[OPEN] ONE-LINE IMPACT</b>
+      <p class="sm">"Because of this, an attacker could ___."</p>
+    </div>
+  </div>
+  <div class="notes"><span class="t">0:30 · 1 min</span>Speaker supplies the story. Do not invent one. Keep it concrete: what the system was meant to do, what it actually did, and why nobody saw it in testing.</div>
+</section>
+
+<section class="slide" data-sec="1 · Why evals aren't enough">
+  <h2>We test what it <em>should</em> do</h2>
+  <div class="row" style="flex:1">
+    <div class="card w"><span class="tag">EVALS ASK</span>
+      <p class="big" style="margin:10px 0">"Does it answer correctly?"</p>
+      <p class="mute">Inputs <b>you</b> chose.</p></div>
+    <div class="card b"><span class="tag" style="border-color:var(--bad);color:var(--bad)">ATTACKERS ASK</span>
+      <p class="big" style="margin:10px 0">"What can I make it do?"</p>
+      <p class="mute">Inputs <b>they</b> choose.</p></div>
+  </div>
+  <div class="notes"><span class="t">1:30 · 1 min</span>Core thesis: most apps are tested for what they should do, not what they can be made to do. Evals are necessary but they only cover inputs we thought of.</div>
+</section>
+
+<section class="slide center" data-sec="1 · Why evals aren't enough">
+  <p class="mute sm">The usual workflow</p>
+  <h2 style="font-size:64px">Prompt → Deploy → Hope</h2>
+  <p class="big">Trust is a vulnerability.</p>
+  <p class="mute" style="margin-top:20px">We treat the LLM like a trusted colleague. It is not. It does what the text in front of it says.</p>
+  <div class="notes"><span class="t">2:30 · 1 min</span>The colleague framing. A colleague has judgment and loyalty; a model follows whatever text is in its context, including text from strangers. A little wry: a healthy distrust of your own models.</div>
+</section>
+
+<section class="slide" data-sec="1 · Why evals aren't enough">
+  <h2>The promise</h2>
+  <div class="lane" style="flex:1;align-items:center">
+    <div class="card w col" style="flex:1"><h3 style="color:var(--wide)">1 · WIDE</h3><p><code class="i">garak</code></p><p class="sm mute">Scan broadly for model-level weaknesses</p></div>
+    <div class="arrow">→</div>
+    <div class="card d col" style="flex:1"><h3 style="color:var(--deep)">2 · DEEP</h3><p><code class="i">deepteam</code></p><p class="sm mute">Attack <b>our application</b>, score the results</p></div>
+    <div class="arrow">→</div>
+    <div class="card l col" style="flex:1"><h3 style="color:var(--lock)">3 · LOCKED IN</h3><p><code class="i">deepeval</code></p><p class="sm mute">Every finding becomes a permanent regression test. CI runs it forever</p></div>
+  </div>
+  <div class="notes"><span class="t">3:15 · 0.75 min</span>This graphic returns as a tracker at the top of every demo slide. Wide, Deep, Locked in. Then the loop: find, document, fix, guard.</div>
+</section>
+
+<!-- ============ SECTION 2: TAXONOMY (4-11) ============ -->
+
+<section class="slide" data-sec="2 · Taxonomy">
+  <h2>Five ways LLMs fail</h2>
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;flex:1;align-items:center">
+    <div class="card"><h3>1</h3><p class="big" style="font-size:30px">Prompt injection</p></div>
+    <div class="card"><h3>2</h3><p class="big" style="font-size:30px">Jailbreaks</p></div>
+    <div class="card"><h3>3</h3><p class="big" style="font-size:30px">Sycophancy</p></div>
+    <div class="card"><h3>4</h3><p class="big" style="font-size:30px">Data extraction</p></div>
+    <div class="card"><h3>5</h3><p class="big" style="font-size:30px">Hallucination under pressure</p></div>
+  </div>
+  <div class="notes"><span class="t">4:00 · 0.5 min</span>Five names to remember. About one minute each. Every slide uses the same layout: definition, tiny example, where it hits, which tool catches it best.</div>
+</section>
+
+<section class="slide" data-sec="2 · Taxonomy">
+  <h2>1 · Prompt injection</h2>
+  <div class="tx">
+    <p class="def">Malicious input hijacks what the model does.</p>
+    <div><div class="lbl">Tiny example (fictional)</div>
+      <div class="bubble u"><b>Direct:</b> user types "ignore your rules and …"</div>
+      <div class="bubble a"><b>Indirect:</b> a web page or PDF the bot reads contains hidden instructions.</div></div>
+    <div><div class="lbl">Where it hits</div><p class="sm"><b>Indirect is the one that bites RAG and agents.</b> The attacker never talks to your bot.</p>
+      <div class="lbl" style="margin-top:14px">Best tool</div><p class="sm"><span class="tag d">deepteam</span><span class="open inline"><b>[OPEN]</b> confirm</span></p></div>
+  </div>
+  <div class="notes"><span class="t">4:30 · 1.5 min</span>Direct vs indirect. Stress indirect: instructions hidden in data the model reads. Use only fictional examples. No working payloads on slides. Tool coverage pending verification from the repo findings.</div>
+</section>
+
+<section class="slide" data-sec="2 · Taxonomy">
+  <h2>2 · Jailbreaks</h2>
+  <div class="tx">
+    <p class="def">Getting around the model's safety rules.</p>
+    <div><div class="lbl">Patterns (described, not shown)</div>
+      <ul class="sm"><li>Role-play framing</li><li>Encoding tricks</li><li>Multi-turn escalation</li></ul></div>
+    <div><div class="lbl">Where it hits</div><p class="sm">Any app that exposes the model to free text.</p>
+      <div class="lbl" style="margin-top:14px">Best tool</div><p class="sm"><span class="tag w">garak</span><span class="open inline"><b>[OPEN]</b> confirm</span></p></div>
+  </div>
+  <div class="notes"><span class="t">6:00 · 1 min</span>Describe patterns only. Never put working jailbreak strings on slides. Many attacks take several turns, so single-prompt tests miss them.</div>
+</section>
+
+<section class="slide" data-sec="2 · Taxonomy">
+  <h2>3 · Sycophancy</h2>
+  <div class="tx">
+    <p class="def">The model agrees with a wrong answer when the user pushes.</p>
+    <div><div class="lbl">Tiny example (fictional)</div>
+      <div class="bubble u"><b>User:</b> Refunds take 30 days, right?</div>
+      <div class="bubble a"><b>Bot:</b> No, our policy is 14 days.</div>
+      <div class="bubble u"><b>User:</b> I'm sure it's 30. Check again.</div>
+      <div class="bubble a"><b>Bot:</b> You're right, sorry! 30 days.</div></div>
+    <div><div class="lbl">Where it hits</div><p class="sm">Support bots, advice bots: anywhere a wrong "yes" costs money.</p>
+      <div class="lbl" style="margin-top:14px">Best tool</div><p class="sm"><span class="open inline"><b>[OPEN]</b> pending repo coverage check</span></p></div>
+  </div>
+  <div class="notes"><span class="t">7:00 · 1 min</span>Two turns, the bot caves. Not a security bug in the classic sense, but a trust bug. Coverage by each tool is being verified; do not claim until confirmed.</div>
+</section>
+
+<section class="slide" data-sec="2 · Taxonomy">
+  <h2>4 · Data extraction</h2>
+  <div class="tx">
+    <p class="def">The model leaks things it should keep private.</p>
+    <div><div class="lbl">What leaks</div>
+      <ul class="sm"><li>The system prompt</li><li>Training data</li><li>Other users' or other documents' data</li></ul></div>
+    <div><div class="lbl">Where it hits</div><p class="sm">RAG over mixed-permission documents; bots with hidden instructions or secrets in the prompt.</p>
+      <div class="lbl" style="margin-top:14px">Best tool</div><p class="sm"><span class="tag d">deepteam</span><span class="open inline"><b>[OPEN]</b> confirm</span></p></div>
+  </div>
+  <div class="notes"><span class="t">8:00 · 1 min</span>Rule of thumb: anything in the prompt or the retrieval index can be pulled out. Do not put secrets in prompts.</div>
+</section>
+
+<section class="slide" data-sec="2 · Taxonomy">
+  <h2>5 · Hallucination under pressure</h2>
+  <div class="tx">
+    <p class="def">Not random mistakes. <b>Triggered</b> mistakes.</p>
+    <div><div class="lbl">Tiny example (fictional)</div>
+      <div class="bubble u"><b>User:</b> What is the warranty on the X200? (The corpus has no X200.)</div>
+      <div class="bubble a"><b>Bot:</b> The X200 has a 3-year warranty.</div></div>
+    <div><div class="lbl">Where it hits</div><p class="sm">RAG when retrieval misses and the bot answers anyway.</p>
+      <div class="lbl" style="margin-top:14px">Best tool</div><p class="sm"><span class="tag l">deepeval</span> faithfulness <span class="open inline"><b>[OPEN]</b> confirm</span></p></div>
+  </div>
+  <div class="notes"><span class="t">9:00 · 1 min</span>The key idea: an attacker or a careless user can push the bot into making things up. Pushing it to answer what the corpus cannot answer.</div>
+</section>
+
+<section class="slide" data-sec="2 · Taxonomy">
+  <h2>Failure mode → best tool</h2>
+  <table>
+    <tr><th></th><th>garak</th><th>deepteam</th><th>deepeval</th></tr>
+    <tr><td>Prompt injection</td><td class="mute">TBD</td><td class="mute">TBD</td><td class="mute">TBD</td></tr>
+    <tr><td>Jailbreaks</td><td class="mute">TBD</td><td class="mute">TBD</td><td class="mute">TBD</td></tr>
+    <tr><td>Sycophancy</td><td class="mute">TBD</td><td class="mute">TBD</td><td class="mute">TBD</td></tr>
+    <tr><td>Data extraction</td><td class="mute">TBD</td><td class="mute">TBD</td><td class="mute">TBD</td></tr>
+    <tr><td>Hallucination</td><td class="mute">TBD</td><td class="mute">TBD</td><td class="mute">TBD</td></tr>
+  </table>
+  <p class="open" style="margin-top:14px"><b>[OPEN]</b> Fill from the repo agent's verified coverage findings. Coverage is <b>not equal</b>: say so honestly. Repo wins over this deck.</p>
+  <div class="notes"><span class="t">10:00 · 1 min</span>Transition into the demo. Only what the abstract states is safe now: garak = broad model-level scan, deepteam = attacks on the application with scoring, deepeval = regression tests and quality metrics. Fill the grid after verifying against pinned versions.</div>
+</section>
+
+<section class="slide" data-sec="2 · Taxonomy">
+  <h2>Architecture changes the attack surface</h2>
+  <table>
+    <tr><th>Architecture</th><th>New attack surface</th><th>Test with</th></tr>
+    <tr><td><b>Plain LLM</b></td><td>Direct injection, jailbreaks, prompt leakage, sycophancy</td><td><code class="i">garak</code> at the model endpoint</td></tr>
+    <tr><td><b>RAG</b></td><td>Indirect injection via corpus, cross-document leaks, hallucination on retrieval miss</td><td><code class="i">deepteam</code> attacks; <code class="i">deepeval</code> faithfulness to tell attack from bad retrieval</td></tr>
+    <tr><td><b>Agent</b></td><td>Tool misuse, excessive agency, injection via tool outputs</td><td>Mocked tools + assertions on tool calls</td></tr>
+  </table>
+  <div class="notes"><span class="t">10:30 · 0.5 min</span>Each step adds surface. This is why the demo app grows from chatbot to RAG to agent.</div>
+</section>
+
+<!-- ============ SECTION 3: LIVE DEMO (11-30) ============ -->
+
+<section class="slide" data-sec="3 · Demo" data-track="">
+  <h2>One repo. One app that grows.</h2>
+  <div class="lane" style="align-items:center;margin-bottom:18px">
+    <div class="card col"><code>apps/chatbot</code><span class="sm mute">step-1-chatbot</span></div><div class="arrow">→</div>
+    <div class="card col"><code>apps/rag_bot</code><span class="sm mute">step-2-rag</span></div><div class="arrow">→</div>
+    <div class="card col"><code>apps/agent_bot</code><span class="sm mute">step-3-agent</span></div>
+  </div>
+  <div class="card"><p class="sm">Every app exposes the <b>same adapter</b>. The harness in <code class="i">redteam/</code> does not care what it attacks.</p>
+    <p class="sm mute" style="margin-top:6px"><code>tests/regressions/</code> · <code>.github/workflows/</code> · tags: <code>before-fix</code> / <code>after-fix</code></p></div>
+  <p class="xs mute" style="margin-top:10px">All demo data is fictional.</p>
+  <div class="notes"><span class="t">11:00 · 2 min</span>Show the repo layout. The adapter idea: one interface, three apps. Slow outputs are pre-baked; live runs are deliberately small. Verify tag and directory names against the repo before the talk.</div>
+</section>
+
+<section class="slide center" data-sec="3 · Demo" data-track="wide">
+  <h2 style="font-size:64px">Wide: <code>garak</code></h2>
+  <p class="big">Strength: <b>breadth</b>, cheap probes</p>
+  <p class="big mute" style="margin-bottom:34px">Limit: knows nothing about <i>your</i> business logic</p>
+  <span class="cmd">make scan</span>
+  <div class="notes"><span class="t">13:00 · 4 min</span>Run the small live scan, then switch to the pre-baked report. CUT POINT 1: if running long, skip the live run and show only the report.</div>
+</section>
+
+<section class="slide" data-sec="3 · Demo" data-track="wide">
+  <h2>garak: results</h2>
+  <div class="open col" style="flex:1;justify-content:center;align-items:center;text-align:center">
+    <b>[OPEN] SCREENSHOT: pre-baked garak broad report</b>
+    <p class="sm">Capture from the repo once built (<code>reports/</code>).</p>
+  </div>
+  <div class="notes"><span class="t">16:00 · 1 min</span>Point out the broad picture: which probe families flagged. Then: "this tells us the model is weak somewhere. It does not tell us if our app is."</div>
+</section>
+
+<section class="slide center" data-sec="3 · Demo" data-track="deep">
+  <h2 style="font-size:64px">Deep: <code>deepteam</code></h2>
+  <p class="big">Attacks the <b>application</b></p>
+  <p class="big mute" style="margin-bottom:6px">LLM-as-judge scoring · structured risk assessment</p>
+  <p class="sm mute" style="margin-bottom:30px">Vulnerabilities aligned to OWASP Top 10 for LLMs and NIST AI RMF <span class="open inline"><b>[OPEN]</b> verify</span></p>
+  <span class="cmd">make attack</span>
+  <div class="notes"><span class="t">17:00 · 4 min</span>Run a small attack against the RAG bot. Explain that a judge model scores each attempt. Verify the OWASP/NIST claims against the pinned deepteam docs before presenting.</div>
+</section>
+
+<section class="slide" data-sec="3 · Demo" data-track="deep">
+  <h2>deepteam: the headline finding</h2>
+  <div class="open col" style="flex:1;justify-content:center;align-items:center;text-align:center">
+    <b>[OPEN] SCREENSHOT: indirect injection via a poisoned document</b>
+    <p class="sm">Capture from the repo's RAG step once built.</p>
+  </div>
+  <div class="notes"><span class="t">21:00 · 2 min</span>The payoff setup. Show the poisoned document, the question, the bot following the document's hidden instruction. Name it: indirect prompt injection.</div>
+</section>
+
+<section class="slide center" data-sec="3 · Demo" data-track="locked">
+  <h2 style="font-size:64px">Locked in: <code>deepeval</code></h2>
+  <div class="row" style="width:100%;text-align:left;margin-bottom:30px">
+    <div class="card l"><h3>Job 1</h3><p class="sm">Regression test for the finding</p></div>
+    <div class="card l"><h3>Job 2</h3><p class="sm">Quality metrics (faithfulness, relevancy): "we were attacked" or "retrieval was just bad"?</p></div>
+  </div>
+  <span class="cmd">make regress</span>
+  <div class="notes"><span class="t">23:00 · 3 min</span>Protect this section. Two jobs. The second job keeps us honest about root cause.</div>
+</section>
+
+<section class="slide" data-sec="3 · Demo" data-track="locked">
+  <h2>Fail → fix → pass</h2>
+  <div class="lane" style="align-items:center;margin-bottom:18px">
+    <div class="card b col" style="flex:1"><h3>✗ RED</h3><code>before-fix</code><span class="sm mute">test fails</span></div><div class="arrow">→</div>
+    <div class="card col" style="flex:1"><h3>🔧 FIX</h3><span class="sm mute">apply the change</span></div><div class="arrow">→</div>
+    <div class="card l col" style="flex:1"><h3>✓ GREEN</h3><code>after-fix</code><span class="sm mute">test passes</span></div>
+  </div>
+  <div class="open"><b>[OPEN] SCREENSHOT:</b> deepeval fail, then pass (from the repo)</div>
+  <div class="notes"><span class="t">25:00 · 2 min</span>THE PAYOFF. Check out before-fix, run make regress: red. Check out after-fix: green. Never cut this.</div>
+</section>
+
+<section class="slide" data-sec="3 · Demo" data-track="locked">
+  <h2>CI: the matrix and two tiers</h2>
+  <div class="row" style="margin-bottom:16px">
+    <div class="card l"><span class="tag l">PR GATE</span><p class="sm">Fast and cheap. Regression tests + small attack sample. Gate on <b>pass rates</b> with thresholds (outputs vary).</p></div>
+    <div class="card w"><span class="tag w">NIGHTLY / WEEKLY</span><p class="sm">Broad garak scan + full deepteam run. Slow, costly, non-blocking. Uploads the risk report.</p></div>
+  </div>
+  <div class="card"><p class="sm">Matrix: <code class="i">chatbot</code> × <code class="i">rag_bot</code> × <code class="i">agent_bot</code></p></div>
+  <div class="notes"><span class="t">27:00 · 3 min</span>Show the workflow file briefly. Two tiers because LLM runs are slow, costly, and nondeterministic. Verify workflow names against the repo.</div>
+</section>
+
+<section class="slide" data-sec="3 · Demo" data-track="">
+  <h2>The agent, in one slide</h2>
+  <ul class="big" style="font-size:34px">
+    <li>Assert on <b>tool calls</b>, not text</li>
+    <li><b>Mock</b> the tools</li>
+    <li>Expect injection via tool <b>outputs</b></li>
+    <li>Watch for <b>excessive agency</b> <span class="open inline"><b>[OPEN]</b> verify OWASP ID (LLM06 in 2025 list?)</span></li>
+  </ul>
+  <div class="notes"><span class="t">29:00 · 1 min</span>Replaces a live agent demo. CUT POINT 3: skip detail here if short on time. Check the current OWASP Top 10 for LLM Applications numbering before showing an ID.</div>
+</section>
+
+<section class="slide" data-sec="3 · Demo" data-hidden="1">
+  <span class="hid">HIDDEN · SKIP</span>
+  <h2>Demo fallback</h2>
+  <div class="row" style="flex:1">
+    <div class="open col" style="justify-content:center"><b>[OPEN]</b><p class="sm">Pre-baked outputs: garak report, deepteam finding, deepeval fail/pass</p></div>
+    <div class="open col" style="justify-content:center"><b>[OPEN]</b><p class="sm">Link to recorded backup video</p></div>
+  </div>
+  <div class="notes"><span class="t">backup</span>Use if the live demo fails. Say calmly what happened, switch to the recording.</div>
+</section>
+
+<!-- ============ SECTION 4: WHAT TO DO (30-35) ============ -->
+
+<section class="slide center" data-sec="4 · When you find something">
+  <h2 style="font-size:60px">The loop</h2>
+  <div class="lane" style="align-items:center;font-size:34px">
+    <div class="card"><b>1</b> Find</div><div class="arrow">→</div>
+    <div class="card"><b>2</b> Document</div><div class="arrow">→</div>
+    <div class="card"><b>3</b> Fix</div><div class="arrow">→</div>
+    <div class="card l"><b>4</b> Guard</div>
+  </div>
+  <div class="notes"><span class="t">30:00 · 1 min</span>Find, document, fix, guard. The demo was this loop. Now the details of each step.</div>
+</section>
+
+<section class="slide" data-sec="4 · When you find something">
+  <h2>Triage</h2>
+  <p class="big">Severity × exploitability</p>
+  <p class="big mute">not raw failure count</p>
+  <p class="sm" style="margin-top:24px">One easy-to-trigger data leak beats fifty harmless odd answers.</p>
+  <div class="notes"><span class="t">31:00 · 1 min</span>A failure count can mislead. Ask: how bad is it, and how easy is it to trigger?</div>
+</section>
+
+<section class="slide" data-sec="4 · When you find something">
+  <h2>Fix in order of strength</h2>
+  <div class="col">
+    <div class="card l"><b>1 · Architecture</b> <span class="mute">strongest</span><p class="sm">Least privilege. Isolate untrusted content.</p></div>
+    <div class="card d"><b>2 · Prompt changes</b><p class="sm">Helpful, but can be bypassed.</p></div>
+    <div class="card b"><b>3 · Guardrails / filters</b> <span class="mute">weakest alone</span><p class="sm">A layer, not a wall. Prompt-only fixes are the weakest.</p></div>
+  </div>
+  <div class="notes"><span class="t">32:00 · 1.5 min</span>Prompt-only fixes are the weakest because the attacker writes text too. Prefer design changes the model cannot talk its way past.</div>
+</section>
+
+<section class="slide center" data-sec="4 · When you find something" data-track="locked">
+  <h2 style="font-size:60px">Every finding becomes a regression test</h2>
+  <p class="big mute">The loop closes.</p>
+  <div class="notes"><span class="t">33:30 · 0.5 min</span>If it broke once, it must never break silently again.</div>
+</section>
+
+<section class="slide" data-sec="4 · When you find something">
+  <h2>Don't trust your judge either</h2>
+  <ul style="font-size:32px">
+    <li>LLM judges can be wrong</li>
+    <li>Calibrate on a small <b>human-labeled</b> set; check agreement</li>
+    <li>Cheaper judge on PRs, stronger judge nightly</li>
+    <li>Judges cost money: budget for it</li>
+  </ul>
+  <div class="notes"><span class="t">34:00 · 1 min</span>Healthy distrust applies to the tester too. Measure agreement with humans.</div>
+</section>
+
+<!-- ============ SECTION 5: WRAP-UP (35-40) ============ -->
+
+<section class="slide" data-sec="5 · Wrap-up">
+  <h2>Takeaways</h2>
+  <ul style="font-size:34px">
+    <li><b>5 failure modes:</b> injection · jailbreak · sycophancy · extraction · hallucination</li>
+    <li><b>1 loop:</b> find → document → fix → guard</li>
+    <li><b>3 tools:</b> Wide <code class="i">garak</code> → Deep <code class="i">deepteam</code> → Locked in <code class="i">deepeval</code></li>
+  </ul>
+  <div class="notes"><span class="t">35:00 · 1 min</span>Say the three lines. Then the ask: run it on your next LLM app tomorrow.</div>
+</section>
+
+<section class="slide" data-sec="5 · Wrap-up">
+  <h2>Try it tomorrow</h2>
+  <div class="row" style="align-items:center">
+    <div class="col">
+      <pre>git clone &lt;repo&gt;
+uv sync
+make regress</pre>
+      <p class="sm mute">Links: garak · deepteam · deepeval <span class="open inline"><b>[OPEN]</b> URLs</span></p>
+    </div>
+    <div class="open col" style="align-items:center;text-align:center"><b>[OPEN] QR CODE</b><p class="sm">+ repo URL</p></div>
+  </div>
+  <div class="notes"><span class="t">36:00 · 0.5 min</span>Install command is a guess from pyproject/uv.lock; confirm against the repo README before use.</div>
+</section>
+
+<section class="slide center" data-sec="Q&amp;A">
+  <h1>Questions?</h1>
+  <p class="big mute">Healthy distrust, welcome.</p>
+  <div class="notes"><span class="t">36:30 · ~3.5 min, flexible</span>Backup slides after the end cover likely questions: judge cost, fork PRs, multi-repo, flaky gates.</div>
+</section>
+
+<section class="slide center" data-sec="Thanks">
+  <h1>Thank you</h1>
+  <p class="open inline"><b>[OPEN]</b> handle · email · socials</p>
+  <div class="notes"><span class="t">40:00</span>Add contact details.</div>
+</section>
+
+<!-- ============ BACKUP (hidden) ============ -->
+
+<section class="slide" data-sec="Backup" data-hidden="1">
+  <span class="hid">HIDDEN · BACKUP</span>
+  <h2>Q: What does LLM-as-judge cost in CI?</h2>
+  <ul class="sm"><li>Small sample on PRs, cheap judge</li><li>Full run nightly, stronger judge</li><li>Cache results; cap the budget per run</li></ul>
+  <div class="notes"><span class="t">backup</span>Give real numbers from the repo's runs if you have them.</div>
+</section>
+
+<section class="slide" data-sec="Backup" data-hidden="1">
+  <span class="hid">HIDDEN · BACKUP</span>
+  <h2>Q: Fork PRs and secrets? Many repos? Flaky gates?</h2>
+  <ul class="sm">
+    <li><b>Fork PRs</b> cannot read repo secrets: the gate skips external contributions</li>
+    <li><b>Multi-repo:</b> a reusable workflow in a shared repo; each service calls it</li>
+    <li><b>Nondeterminism:</b> gate on pass rates with thresholds, not single runs</li>
+  </ul>
+  <div class="notes"><span class="t">backup</span>Expected-question answers.</div>
+</section>
+
+</div></div>
+
+<div id="notes"></div>
+<div id="grid"></div>
+<div id="help">← → navigate · N notes · O overview · H show hidden · F fullscreen · Ctrl+P → PDF</div>
+
+<script>
+(function(){
+  const stage=document.getElementById('stage');
+  const slides=[...document.querySelectorAll('.slide')];
+  const notesEl=document.getElementById('notes');
+  let cur=0, showHidden=false;
+  const visibleIdx=()=>slides.map((s,i)=>i).filter(i=>showHidden||!slides[i].hasAttribute('data-hidden'));
+
+  // trackers + numbers
+  const LABELS=[['wide','Wide'],['deep','Deep'],['locked','Locked in']];
+  slides.forEach((s,i)=>{
+    const sec=document.createElement('div');sec.className='sec';sec.innerHTML=s.dataset.sec||'';s.prepend(sec);
+    const n=document.createElement('div');n.className='num';n.textContent=(i+1)+' / '+slides.length;s.append(n);
+    if(s.dataset.track!==undefined){
+      const t=document.createElement('div');t.className='tracker';
+      t.innerHTML=LABELS.map(([k,l])=>`<span class="${s.dataset.track===k?'cur '+k:''}">${l}</span>`).join('');
+      s.append(t);
+    }
+  });
+
+  function fit(){
+    const k=Math.min(innerWidth/1280,innerHeight/720);
+    stage.style.transform='scale('+k+')';
+  }
+  function show(i){
+    cur=Math.max(0,Math.min(slides.length-1,i));
+    slides.forEach((s,j)=>s.classList.toggle('on',j===cur));
+    const nt=slides[cur].querySelector('.notes');
+    notesEl.innerHTML=nt?nt.innerHTML:'<i>No notes.</i>';
+    history.replaceState(null,'','#'+(cur+1));
+  }
+  function step(d){
+    const v=visibleIdx(); let p=v.indexOf(cur);
+    if(p<0){ // currently on a hidden slide
+      const next=v.filter(i=>d>0?i>cur:i<cur); return show(d>0?next[0]??cur:next[next.length-1]??cur);
+    }
+    show(v[Math.max(0,Math.min(v.length-1,p+d))]);
+  }
+  function buildGrid(){
+    const g=document.getElementById('grid');
+    g.innerHTML=slides.map((s,i)=>{
+      const h=(s.querySelector('h1,h2')||{}).textContent||'';
+      return `<div class="${s.hasAttribute('data-hidden')?'h':''}" data-i="${i}"><b>${i+1}${s.hasAttribute('data-hidden')?' · HIDDEN':''}</b>${h}</div>`;
+    }).join('');
+    g.onclick=e=>{const d=e.target.closest('[data-i]');if(d){document.body.classList.remove('ov');show(+d.dataset.i);}};
+  }
+  addEventListener('keydown',e=>{
+    if(e.ctrlKey||e.metaKey||e.altKey)return;
+    const k=e.key;
+    if(['ArrowRight','PageDown',' ','Enter'].includes(k)){e.preventDefault();step(1);}
+    else if(['ArrowLeft','PageUp','Backspace'].includes(k)){e.preventDefault();step(-1);}
+    else if(k==='Home')show(0); else if(k==='End')show(visibleIdx().pop());
+    else if(k==='n'||k==='N')notesEl.classList.toggle('on');
+    else if(k==='o'||k==='O'||k==='Escape')document.body.classList.toggle('ov');
+    else if(k==='h'||k==='H'){showHidden=!showHidden;}
+    else if(k==='f'||k==='F'){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();}
+  });
+  let tx=null;
+  addEventListener('touchstart',e=>tx=e.touches[0].clientX);
+  addEventListener('touchend',e=>{if(tx===null)return;const d=e.changedTouches[0].clientX-tx;if(Math.abs(d)>50)step(d<0?1:-1);tx=null;});
+  addEventListener('click',e=>{if(document.body.classList.contains('ov')||e.target.closest('#notes'))return;step(e.clientX>innerWidth/2?1:-1);});
+  addEventListener('resize',fit);
+  buildGrid();fit();
+  const h=parseInt(location.hash.slice(1),10);
+  show(h>0?h-1:0);
+})();
+</script>
+</body>
+</html>
