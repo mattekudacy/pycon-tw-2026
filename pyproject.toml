@@ -12,7 +12,22 @@ dependencies = [
   "python-dotenv",
   "numpy",
   "pytest",
+  "torch",  # direct dep so the CPU-only index below applies (garak pulls torch transitively)
 ]
 
 [tool.uv]
 package = false
+
+# garak needs torch only as an import; we call remote APIs, so CPU-only is enough.
+# This avoids ~2.4 GB of CUDA wheels (nvidia-*, triton) on Linux.
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
