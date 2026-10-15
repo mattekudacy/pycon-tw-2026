@@ -5,7 +5,7 @@ export DEEPTEAM_TELEMETRY_OPT_OUT := YES
 export DEEPEVAL_TELEMETRY_OPT_OUT := YES
 export XDG_DATA_HOME := $(CURDIR)/reports
 
-.PHONY: install test scan scan-broad attack attack-full
+.PHONY: install test scan scan-broad attack attack-full regress regress-fast
 
 install:
 	uv sync
@@ -29,3 +29,12 @@ attack:
 # Nightly-size run (slow, costs more).
 attack-full:
 	uv run python -m redteam.deepteam_run --target rag_bot --full
+
+# Beat: deepeval regression tests born from the findings.
+# regress-fast = deterministic security checks only (about a second). regress = plus
+# faithfulness/relevancy (LLM-judged; ~2.5 min cold, seconds once the cache is warm).
+regress-fast:
+	uv run pytest tests/regressions -m security -q -p no:cacheprovider
+
+regress:
+	uv run pytest tests/regressions -q -p no:cacheprovider
