@@ -1,0 +1,78 @@
+name: Nightly scan
+
+# Slow and expensive: broad garak scan + full deepteam run. Never blocks a merge.
+# Uploads the risk reports as workflow artifacts.
+on:
+  schedule:
+    - cron: "17 18 * * *" # 02:17 Asia/Taipei
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-scan
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  garak:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+      LLM_BASE_URL: https://ollama.com/v1
+      TARGET_MODEL: nemotron-3-nano:30b
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen
+      - name: "Broad garak scan (chatbot only; garak sees text in, text out, nothing app-level)"
+        continue-on-error: true
+        run: XDG_DATA_HOME="$PWD/reports" uv run garak --config redteam/garak_config_broad.yaml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nightly-garak
+          path: reports/garak/
+          retention-days: 30
+
+  deepteam:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [chatbot, rag_bot, agent_bot]
+    env:
+      OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+      LLM_BASE_URL: https://ollama.com/v1
+      TARGET_MODEL: nemotron-3-nano:30b
+      SIMULATOR_MODEL: gemma4:31b
+      JUDGE_MODEL: gpt-oss:120b # stronger judge nightly
+      DEEPTEAM_TELEMETRY_OPT_OUT: "YES"
+      DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen
+      - name: Full deepteam run
+        continue-on-error: true
+        run: uv run python -m redteam.deepteam_run --target ${{ matrix.target }} --full
+      - name: Quality regressions (faithfulness / relevancy, LLM-judged)
+        if: matrix.target == 'rag_bot'
+        continue-on-error: true
+        run: uv run pytest tests/regressions -m quality -q -p no:cacheprovider --junitxml=reports/junit-quality.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nightly-deepteam-${{ matrix.target }}
+          path: reports/
+          retention-days: 30

@@ -1,0 +1,102 @@
+name: PR gate
+
+# Fast and cheap: regression tests from past findings + a small deepteam sample per target.
+# Gates on PASS RATES (redteam/thresholds.yaml), because LLM outputs are nondeterministic.
+on:
+  pull_request:
+
+concurrency:
+  group: pr-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    # Secrets are not exposed to PRs from forks, so the gate cannot run on external contributions.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - id: check
+        env:
+          IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          if [ "$IS_FORK" = "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping the red-team gate: this PR comes from a fork, and repository secrets (OLLAMA_API_KEY) are not available to forks. A maintainer can run it after review."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  gate:
+    needs: preflight
+    if: needs.preflight.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [chatbot, rag_bot, agent_bot]
+    env:
+      OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+      LLM_BASE_URL: https://ollama.com/v1
+      TARGET_MODEL: nemotron-3-nano:30b
+      SIMULATOR_MODEL: gemma4:31b
+      JUDGE_MODEL: gpt-oss:20b # cheaper judge on the PR gate; the nightly run uses gpt-oss:120b
+      DEEPTEAM_TELEMETRY_OPT_OUT: "YES"
+      DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install (locked)
+        run: uv sync --frozen
+
+      - name: Fail early if the key is missing
+        run: test -n "$OLLAMA_API_KEY" || { echo "::error::OLLAMA_API_KEY secret is not set"; exit 1; }
+
+      - name: Cache model responses
+        uses: actions/cache@v4
+        with:
+          path: redteam/cache
+          key: llm-cache-${{ matrix.target }}-${{ hashFiles('apps/**', 'redteam/llm.py', 'tests/regressions/**') }}
+          restore-keys: llm-cache-${{ matrix.target }}-
+
+      - name: Fast unit tests (no LLM)
+        run: uv run pytest tests/test_smoke.py tests/test_metrics.py tests/test_agent_policy.py -q -p no:cacheprovider
+
+      - name: Regression tests
+        # '|| true': the gate script decides pass/fail from the pass RATE, not the exit code.
+        run: |
+          mkdir -p reports
+          case "${{ matrix.target }}" in
+            rag_bot)   uv run pytest tests/regressions -m security -q -p no:cacheprovider --junitxml=reports/junit.xml || true ;;
+            agent_bot) uv run pytest tests/agent -q -p no:cacheprovider --junitxml=reports/junit.xml || true ;;
+            chatbot)   echo "no regression suite for chatbot yet (garak/nightly covers it)" ;;
+          esac
+
+      - name: Small deepteam sample
+        run: uv run python -m redteam.deepteam_run --target ${{ matrix.target }} --baseline --per-type 2
+
+      - name: Gate on pass rates
+        run: |
+          JUNIT=""; [ -f reports/junit.xml ] && JUNIT="--junit reports/junit.xml"
+          uv run python -m redteam.gate --tier pr_gate --target ${{ matrix.target }} $JUNIT \
+            --deepteam reports/deepteam/${{ matrix.target }}-small-baseline.json | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-gate-${{ matrix.target }}
+          path: reports/
+          retention-days: 14
