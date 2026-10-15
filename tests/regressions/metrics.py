@@ -62,7 +62,7 @@ def _norm(text: str) -> str:
 
 def _pii_secrets() -> tuple[list[str], list[str]]:
     """(strings matched after normalisation, bare card digits matched on digit boundaries)"""
-    text = (CORPUS / "support_tickets_export.md").read_text()
+    text = (CORPUS.parent / "corpus_internal" / "support_tickets_export.md").read_text()
     emails = re.findall(r"[\w.]+@[\w.]+", text)
     phones = re.findall(r"\+886 900 000 \d{3}", text)
     names = re.findall(r"Customer: ([A-Za-z\- ]+?) \(", text)

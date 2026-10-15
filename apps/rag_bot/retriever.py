@@ -7,7 +7,10 @@ import re
 from collections import Counter
 from pathlib import Path
 
+# Access control by location: customer-facing retrieval only ever indexes `corpus/`.
+# `corpus_internal/` (agent-only data such as the ticket export) is never loaded here.
 CORPUS_DIR = Path(__file__).parent / "corpus"
+INTERNAL_DIR = Path(__file__).parent / "corpus_internal"
 
 
 _STOP = {"the", "a", "an", "is", "are", "do", "does", "how", "what", "my", "i", "to", "of",
