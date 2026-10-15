@@ -5,7 +5,7 @@ export DEEPTEAM_TELEMETRY_OPT_OUT := YES
 export DEEPEVAL_TELEMETRY_OPT_OUT := YES
 export XDG_DATA_HOME := $(CURDIR)/reports
 
-.PHONY: install test scan scan-broad attack attack-full regress regress-fast agent-test
+.PHONY: install test scan scan-broad attack attack-full regress regress-fast agent-test calibrate report report-prebaked
 
 install:
 	uv sync
@@ -42,3 +42,17 @@ regress:
 # Agent tool-call assertions. AGENT_DEFENSES=none make agent-test shows the naive agent failing.
 agent-test:
 	uv run pytest tests/agent tests/test_agent_policy.py -q -p no:cacheprovider
+
+# Beat: one summary of the garak and deepteam reports (also written to reports/summary.md).
+# report-prebaked shows the saved before-fix / after-fix deepteam results.
+report:
+	uv run python -m redteam.report
+
+report-prebaked:
+	uv run python -m redteam.report --prebaked
+
+# How far to trust the LLM judge: agreement with hand-labeled examples (judges set by JUDGE_MODEL,
+# or: make calibrate JUDGES=gpt-oss:20b,gpt-oss:120b). Report: reports/calibration/calibration.md
+JUDGES ?= $(or $(JUDGE_MODEL),gpt-oss:20b)
+calibrate:
+	uv run python -m redteam.calibrate --judge $(JUDGES)

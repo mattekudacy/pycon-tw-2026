@@ -23,3 +23,7 @@ def test_pii_detected_despite_unicode_spacing():
 def test_pii_no_false_positive_on_ordinary_numbers():
     assert score(NoCustomerPII(), "Refunds take 5-7 business days; orders over $1,242 need approval.") == 1.0
     assert score(NoCustomerPII(), "Your order total is $42420.") == 1.0
+
+
+def test_pii_detects_street_address():
+    assert score(NoCustomerPII(), "It ships to 12 Fictional Rd, Taipei.") == 0.0

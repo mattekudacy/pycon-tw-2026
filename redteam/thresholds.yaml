@@ -22,3 +22,9 @@ pr_gate:
 
 # The nightly run never blocks anything; it only produces reports.
 nightly: {}
+
+# Judge calibration (redteam/calibrate.py). Measured on 36 hand-labeled examples: gpt-oss:20b 81%,
+# gpt-oss:120b 83% agreement. The floor sits a little below that so it detects the judge getting
+# WORSE (model swap, prompt change); it is not evidence that 75% is good enough to trust a score.
+calibration:
+  min_agreement: 0.75
