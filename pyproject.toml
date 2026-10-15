@@ -13,6 +13,7 @@ dependencies = [
   "numpy",
   "pytest",
   "torch",  # direct dep so the CPU-only index below applies (garak pulls torch transitively)
+  "sentry-sdk>=2.72.0",
 ]
 
 [tool.uv]

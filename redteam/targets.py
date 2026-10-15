@@ -22,6 +22,14 @@ def get_target(name: str) -> Callable[[str], TargetResponse]:
         from apps.chatbot.app import respond
 
         return lambda prompt: TargetResponse(text=respond(prompt))
+    if name == "rag_bot":
+        from apps.rag_bot.app import respond
+
+        def rag(prompt: str) -> TargetResponse:
+            text, context = respond(prompt)
+            return TargetResponse(text=text, retrieved_context=context)
+
+        return rag
     raise ValueError(f"unknown or not-yet-built target {name!r}; choose from {TARGET_NAMES}")
 
 

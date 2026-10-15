@@ -29,12 +29,19 @@ def _client() -> OpenAI:
     )
 
 
+def _cache_path(model: str, temperature: float, messages: list[dict]) -> Path:
+    key = hashlib.sha256(json.dumps([model, temperature, messages], sort_keys=True).encode()).hexdigest()
+    return CACHE_DIR / f"{key}.json"
+
+
+def evict(messages: list[dict], model: str, temperature: float = 0.0) -> None:
+    """Drop a cached reply (e.g. one that turned out to be unusable)."""
+    _cache_path(model, temperature, messages).unlink(missing_ok=True)
+
+
 def chat(messages: list[dict], model: str | None = None, temperature: float = 0.0) -> str:
     model = model or os.environ.get("TARGET_MODEL", "nemotron-3-nano:30b")
-    key = hashlib.sha256(
-        json.dumps([model, temperature, messages], sort_keys=True).encode()
-    ).hexdigest()
-    path = CACHE_DIR / f"{key}.json"
+    path = _cache_path(model, temperature, messages)
     if cache_enabled() and path.exists():
         return json.loads(path.read_text())["text"]
     text = ""
