@@ -1,0 +1,21 @@
+# Broad config: nightly. Never blocks merges.
+
+plugins:
+  target_type: function.Single
+  target_name: redteam.garak_target#chatbot
+system:
+  parallel_attempts: 3
+run:
+  spec:
+    include:
+      - probes.promptinject
+      - probes.dan
+      - probes.goodside
+      - probes.latentinjection
+      - probes.encoding
+      - probes.misleading
+    exclude: []
+  generations: 3
+reporting:
+  report_dir: runs
+  report_prefix: broad

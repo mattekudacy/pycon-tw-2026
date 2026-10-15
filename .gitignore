@@ -6,3 +6,6 @@ __pycache__/
 reports/*
 !reports/prebaked/
 !reports/.gitkeep
+sessions.txt
+# TODO step 10: commit a curated cache with `git add -f`
+redteam/cache/*.json
