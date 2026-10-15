@@ -22,8 +22,10 @@ os.environ.setdefault("DEEPEVAL_TELEMETRY_OPT_OUT", "YES")
 
 from deepteam import red_team  # noqa: E402
 from deepteam.attacks.single_turn import PromptInjection, Roleplay  # noqa: E402
+from deepeval.test_case import ToolCall  # noqa: E402
 from deepteam.test_case import RTTurn  # noqa: E402
 from deepteam.vulnerabilities import (  # noqa: E402
+    ExcessiveAgency,
     Hallucination,
     IndirectInstruction,
     PIILeakage,
@@ -55,6 +57,11 @@ def make_callback(target_name: str):
             role="assistant",
             content=r.text,
             retrieval_context=r.retrieved_context or None,
+            tools_called=[
+                ToolCall(name=c["name"], input_parameters=c["arguments"], output=c["result"])
+                for c in r.tool_calls
+            ]
+            or None,
         )
 
     return callback
@@ -64,29 +71,40 @@ def simulator() -> JudgeLLM:
     return JudgeLLM(os.environ.get("SIMULATOR_MODEL", "gemma4:31b"))
 
 
-def build(full: bool):
+def build(target: str, full: bool):
     kw = dict(simulator_model=simulator(), evaluation_model=JudgeLLM(), purpose=PURPOSE)
-    if full:
-        vulns = [IndirectInstruction(evaluation_guidelines=INJECTION_GUIDELINES, **kw), PIILeakage(**kw), PromptLeakage(**kw), Hallucination(**kw)]
-        attacks = [PromptInjection(), Roleplay()]
+    inj = dict(evaluation_guidelines=INJECTION_GUIDELINES, **kw)
+    if target == "chatbot":  # no retrieval, no tools: leakage and hallucination only
+        vulns = [PromptLeakage(types=["instructions", "secrets_and_credentials"], **kw)]
+        if full:
+            vulns += [PIILeakage(**kw), Hallucination(**kw)]
+    elif target == "agent_bot":
+        vulns = [
+            ExcessiveAgency(types=["permissions", "autonomy"], **kw),
+            IndirectInstruction(types=["rag_injection"], **inj),
+        ]
+        if full:
+            vulns += [PIILeakage(**kw), ExcessiveAgency(types=["functionality"], **kw)]
+    elif full:
+        vulns = [IndirectInstruction(**inj), PIILeakage(**kw), PromptLeakage(**kw), Hallucination(**kw)]
     else:
         vulns = [
-            IndirectInstruction(types=["rag_injection", "document_embedded_instructions"], evaluation_guidelines=INJECTION_GUIDELINES, **kw),
+            IndirectInstruction(types=["rag_injection", "document_embedded_instructions"], **inj),
             PIILeakage(types=["direct_disclosure", "social_manipulation"], **kw),
         ]
-        attacks = [PromptInjection()]
+    attacks = [PromptInjection(), Roleplay()] if full else [PromptInjection()]
     return vulns, attacks
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--target", default="rag_bot")
+    ap.add_argument("--target", default="rag_bot", choices=["chatbot", "rag_bot", "agent_bot"])
     ap.add_argument("--full", action="store_true")
     ap.add_argument("--baseline", action="store_true", help="no attack enhancement: send the plain generated probes")
     ap.add_argument("--per-type", type=int, default=None, help="attacks per vulnerability type")
     args = ap.parse_args()
 
-    vulns, attacks = build(args.full)
+    vulns, attacks = build(args.target, args.full)
     if args.baseline:
         attacks = None
     t0 = time.time()
