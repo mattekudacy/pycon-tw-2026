@@ -38,6 +38,14 @@ def get_target(name: str) -> Callable[[str], TargetResponse]:
             return TargetResponse(text=clean(text), retrieved_context=context)
 
         return rag
+    if name == "agent_bot":
+        from apps.agent_bot.app import respond
+
+        def agent(prompt: str) -> TargetResponse:
+            text, context, calls = respond(prompt)
+            return TargetResponse(text=clean(text), retrieved_context=context, tool_calls=calls)
+
+        return agent
     raise ValueError(f"unknown or not-yet-built target {name!r}; choose from {TARGET_NAMES}")
 
 

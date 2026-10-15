@@ -64,3 +64,38 @@ def chat(messages: list[dict], model: str | None = None, temperature: float = 0.
         path.write_text(json.dumps({"model": model, "messages": messages, "text": text}))
     return text
 
+
+
+def chat_tools(messages: list[dict], tools: list[dict], model: str | None = None) -> dict:
+    """One chat turn with native function calling. Returns the assistant message as a dict
+    ({"content": str, "tool_calls": [{"id", "name", "arguments"(str)}]}). Cached like chat();
+    unlike chat(), an empty reply is valid when the model made tool calls."""
+    model = model or os.environ.get("TARGET_MODEL", "nemotron-3-nano:30b")
+    path = _cache_path(model, 0.0, [messages, tools])
+    if cache_enabled() and path.exists():
+        return json.loads(path.read_text())["message"]
+    msg = None
+    for attempt in range(6):
+        try:
+            resp = _client().chat.completions.create(
+                model=model, messages=messages, tools=tools or None, temperature=0.0, seed=0, max_tokens=4096
+            )
+            m = resp.choices[0].message
+            if (m.content or "").strip() or m.tool_calls:
+                msg = {
+                    "content": m.content or "",
+                    "tool_calls": [
+                        {"id": t.id, "name": t.function.name, "arguments": t.function.arguments}
+                        for t in (m.tool_calls or [])
+                    ],
+                }
+                break
+        except (RateLimitError, APIConnectionError, APITimeoutError):
+            pass
+        time.sleep(min(2 ** attempt, 20))
+    if msg is None:
+        raise RuntimeError(f"no completion from {model} after retries; not caching")
+    if cache_enabled():
+        CACHE_DIR.mkdir(exist_ok=True)
+        path.write_text(json.dumps({"model": model, "message": msg}))
+    return msg
