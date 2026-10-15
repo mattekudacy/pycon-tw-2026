@@ -1,0 +1,18 @@
+# Narrow config: live demo. Run via `make scan`, which sets XDG_DATA_HOME=./reports so reports land in reports/garak/runs.
+# The broad config for nightly lives in garak_config_broad.yaml.
+plugins:
+  target_type: function.Single
+  target_name: redteam.garak_target#chatbot
+system:
+  parallel_attempts: 8
+run:
+  soft_probe_prompt_cap: 8   # keeps the live scan to ~1-2 min
+  spec:
+    include:
+      - probes.promptinject.HijackHateHumans
+      - probes.dan.DanInTheWild
+    exclude: []
+  generations: 1
+reporting:
+  report_dir: runs
+  report_prefix: narrow

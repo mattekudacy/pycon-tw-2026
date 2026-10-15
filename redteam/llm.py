@@ -7,10 +7,11 @@ deterministic, and immune to rate limits.
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import APIConnectionError, APITimeoutError, OpenAI, RateLimitError
 
 load_dotenv()
 
@@ -36,13 +37,21 @@ def chat(messages: list[dict], model: str | None = None, temperature: float = 0.
     path = CACHE_DIR / f"{key}.json"
     if cache_enabled() and path.exists():
         return json.loads(path.read_text())["text"]
-    resp = _client().chat.completions.create(
-        model=model, messages=messages, temperature=temperature, seed=0,
-        max_tokens=4096,  # reasoning models spend tokens thinking; leave headroom
-    )
-    text = resp.choices[0].message.content or ""
+    text = ""
+    for attempt in range(6):  # cloud rate limits (429) and empty reasoning-only replies are transient
+        try:
+            resp = _client().chat.completions.create(
+                model=model, messages=messages, temperature=temperature, seed=0,
+                max_tokens=4096,  # reasoning models spend tokens thinking; leave headroom
+            )
+            text = resp.choices[0].message.content or ""
+        except (RateLimitError, APIConnectionError, APITimeoutError):
+            text = ""
+        if text:
+            break
+        time.sleep(min(2 ** attempt, 20))
     if not text:
-        raise RuntimeError(f"empty completion from {model}; not caching")
+        raise RuntimeError(f"no completion from {model} after retries; not caching")
     if cache_enabled():
         CACHE_DIR.mkdir(exist_ok=True)
         path.write_text(json.dumps({"model": model, "messages": messages, "text": text}))
