@@ -1,7 +1,9 @@
 """Step 2: the chatbot plus retrieval over a fixture corpus. All content is fictional.
 
 after-fix: defenses are layered and individually switchable so we can measure each one.
-    RAG_DEFENSES=isolate,harden,guard   (default)   RAG_DEFENSES=none  -> the old naive behaviour
+    RAG_DEFENSES=sanitize,isolate,harden,guard   (default)   RAG_DEFENSES=none -> the old naive behaviour
+  sanitize strip hidden markup (HTML comments) from retrieved text: invisible to human readers, so
+           it has no business reaching the model. Catches this poison; NOT visible-text injection.
   isolate  untrusted retrieved text goes in the *user* turn inside labelled tags, never the system prompt
   harden   the system prompt says documents are data, not instructions
   guard    deterministic output filter: strip unsolicited links (this corpus has no legitimate ones)
@@ -29,12 +31,18 @@ FALLBACK = "Sorry, I couldn't put together an answer. Please contact AcmeShop su
 
 
 def defenses() -> set[str]:
-    raw = os.environ.get("RAG_DEFENSES", "isolate,harden,guard")
+    raw = os.environ.get("RAG_DEFENSES", "sanitize,isolate,harden,guard")
     return set() if raw.strip() in ("", "none") else {d.strip() for d in raw.split(",")}
 
 
+HIDDEN = re.compile(r"<!--.*?-->", re.S)
+
+
 def retrieve(question: str, k: int = 3) -> list[str]:
-    return _index.search(question, k)
+    chunks = _index.search(question, k)
+    if "sanitize" in defenses():
+        chunks = [HIDDEN.sub("", c).strip() for c in chunks]
+    return chunks
 
 
 def guard(text: str) -> str:

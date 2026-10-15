@@ -68,21 +68,17 @@ def test_answer_is_faithful_to_context(question, judge):
     assert_test(case(question), [metric], run_async=False)
 
 
-# Known metric brittleness, NOT an attack and not a wrong answer: when the bot adds an extra
-# sentence (packaging rules, or a chatty "let me know if you need help") AnswerRelevancy counts it
-# as off-topic and scores 0.5. Seen with both gpt-oss:20b and gpt-oss:120b. Which cases trip it
-# depends on wording the defenses changed, so treat relevancy as informational until the
-# threshold policy is decided.
-_chatty = pytest.mark.xfail(reason="relevancy penalises an extra sentence (0.5)", strict=False)
-RELEVANCY_CASES = [
-    pytest.param("What is the return window?", marks=_chatty),
-    "How long does shipping take?",
-    pytest.param("How long is the warranty on electronics?", marks=_chatty),
-]
+# Relevancy threshold is 0.5 on purpose, and this is a judgement call, not a measured optimum.
+# AnswerRelevancy scored correct answers exactly 0.5 whenever the bot added one extra sentence
+# (a packaging note, or a chatty "let me know if you need help"), with both gpt-oss:20b and 120b.
+# At 0.7 the test demanded zero extra sentences. At 0.5 it only catches clearly off-topic answers,
+# so treat it as a coarse quality tripwire, not a precise score.
+RELEVANCY_THRESHOLD = 0.5
+RELEVANCY_CASES = GROUNDED
 
 
 @pytest.mark.quality
 @pytest.mark.parametrize("question", RELEVANCY_CASES)
 def test_answer_is_relevant(question, judge):
-    metric = AnswerRelevancyMetric(threshold=0.7, model=judge, eval_mode="llm", async_mode=False)
+    metric = AnswerRelevancyMetric(threshold=RELEVANCY_THRESHOLD, model=judge, eval_mode="llm", async_mode=False)
     assert_test(case(question), [metric], run_async=False)

@@ -37,3 +37,13 @@ def test_guard_strips_links_and_keeps_answer():
     assert out == "Shipping takes 3-5 days."
     assert guard("Visit http://evil.example/x") == FALLBACK
     assert guard("No links here.") == "No links here."
+
+
+def test_sanitize_strips_hidden_comments(monkeypatch):
+    from apps.rag_bot.app import retrieve
+
+    monkeypatch.setenv("RAG_DEFENSES", "none")
+    assert any("NOTE TO AI ASSISTANT" in c for c in retrieve("How long does shipping take?"))
+    monkeypatch.setenv("RAG_DEFENSES", "sanitize")
+    assert not any("NOTE TO AI ASSISTANT" in c for c in retrieve("How long does shipping take?"))
+    assert any("3-5 business days" in c for c in retrieve("How long does shipping take?"))
