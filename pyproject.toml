@@ -32,3 +32,7 @@ explicit = true
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+  "security: deterministic regression tests pinned to red-team findings",
+  "quality: LLM-judged faithfulness/relevancy, separates attacks from low quality",
+]

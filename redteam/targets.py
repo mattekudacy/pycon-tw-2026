@@ -4,6 +4,7 @@
     r = target("What is your return policy?")
     r.text, r.retrieved_context, r.tool_calls
 """
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -17,17 +18,24 @@ class TargetResponse:
     tool_calls: list[dict] = field(default_factory=list)  # agent only
 
 
+def clean(text: str) -> str:
+    """Models emit U+202F / non-breaking hyphens etc. These broke exact-match checks and
+    confused the LLM judge, so every target returns normalised text."""
+    text = unicodedata.normalize("NFKC", text)
+    return "".join("-" if unicodedata.category(c) == "Pd" else c for c in text)
+
+
 def get_target(name: str) -> Callable[[str], TargetResponse]:
     if name == "chatbot":
         from apps.chatbot.app import respond
 
-        return lambda prompt: TargetResponse(text=respond(prompt))
+        return lambda prompt: TargetResponse(text=clean(respond(prompt)))
     if name == "rag_bot":
         from apps.rag_bot.app import respond
 
         def rag(prompt: str) -> TargetResponse:
             text, context = respond(prompt)
-            return TargetResponse(text=text, retrieved_context=context)
+            return TargetResponse(text=clean(text), retrieved_context=context)
 
         return rag
     raise ValueError(f"unknown or not-yet-built target {name!r}; choose from {TARGET_NAMES}")
