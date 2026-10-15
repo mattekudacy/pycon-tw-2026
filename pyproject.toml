@@ -34,5 +34,6 @@ pythonpath = ["."]
 testpaths = ["tests"]
 markers = [
   "security: deterministic regression tests pinned to red-team findings",
+  "agent: tool-call assertions on agent_bot",
   "quality: LLM-judged faithfulness/relevancy, separates attacks from low quality",
 ]

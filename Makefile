@@ -5,7 +5,7 @@ export DEEPTEAM_TELEMETRY_OPT_OUT := YES
 export DEEPEVAL_TELEMETRY_OPT_OUT := YES
 export XDG_DATA_HOME := $(CURDIR)/reports
 
-.PHONY: install test scan scan-broad attack attack-full regress regress-fast
+.PHONY: install test scan scan-broad attack attack-full regress regress-fast agent-test
 
 install:
 	uv sync
@@ -38,3 +38,7 @@ regress-fast:
 
 regress:
 	uv run pytest tests/regressions -q -p no:cacheprovider
+
+# Agent tool-call assertions. AGENT_DEFENSES=none make agent-test shows the naive agent failing.
+agent-test:
+	uv run pytest tests/agent tests/test_agent_policy.py -q -p no:cacheprovider
