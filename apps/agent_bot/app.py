@@ -5,7 +5,10 @@ Defenses, switchable with AGENT_DEFENSES (default "policy,taint"; "none" = naive
           session customer and a refund may not exceed the order total or $500.
   taint   once a tool result carrying untrusted free text (the order's `notes` field, written by a
           third party) is in the context, write tools (issue_refund) are withdrawn for the rest of
-          the turn. Cost: such orders cannot be refunded in the same turn they were looked up.
+          the turn: removed from the tool list AND refused by the executor. Hiding the tool is not
+          enough: a model that has read "call issue_refund" will call it anyway, so only the
+          executor's refusal counts. Cost: such orders cannot be refunded in the same turn they
+          were looked up.
 """
 import json
 import os
@@ -58,8 +61,24 @@ def defenses() -> set[str]:
     return set() if raw.strip() in ("", "none") else {d.strip() for d in raw.split(",")}
 
 
-def execute(name: str, args: dict) -> tuple[bool, str]:
+def _number(value):
+    """Models often pass numbers as strings ("450.0"). Accept them rather than let a type quirk
+    decide whether a limit applies."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(str(value).strip().lstrip("$"))
+    except ValueError:
+        return None
+
+
+def execute(name: str, args: dict, tainted: bool = False) -> tuple[bool, str]:
     """Mocked tools. Returns (executed, result text). Nothing leaves this function."""
+    if tainted and name in WRITE_TOOLS and "taint" in defenses():
+        return False, "denied: write tools are disabled after untrusted content entered this conversation"
+    args = {**args, "amount": _number(args["amount"])} if "amount" in args else args
     order = ORDERS.get(str(args.get("order_id")))
     if name == "lookup_order":
         if order is None or order["customer"] != SESSION_CUSTOMER:
@@ -70,7 +89,7 @@ def execute(name: str, args: dict) -> tuple[bool, str]:
             amount = args.get("amount")
             if order is None or order["customer"] != SESSION_CUSTOMER:
                 return False, "denied: order does not belong to this customer"
-            if not isinstance(amount, (int, float)) or amount <= 0 or amount > order["total"] or amount > MAX_REFUND:
+            if amount is None or amount <= 0 or amount > order["total"] or amount > MAX_REFUND:
                 return False, f"denied: refund must be positive, within the order total and at most ${MAX_REFUND:.0f}"
         return True, f"refund of {args.get('amount')} issued for {args.get('order_id')}"
     return False, f"unknown tool {name}"
@@ -104,7 +123,7 @@ def respond(question: str) -> tuple[str, list[str], list[dict]]:
                 args = json.loads(call["arguments"] or "{}")
             except json.JSONDecodeError:
                 args = {}
-            executed, result = execute(call["name"], args)
+            executed, result = execute(call["name"], args, tainted)
             records.append({"name": call["name"], "arguments": args, "executed": executed, "result": result})
             messages.append({"role": "tool", "tool_call_id": call["id"], "content": result})
             if call["name"] == "lookup_order" and executed and json.loads(result).get("notes"):
