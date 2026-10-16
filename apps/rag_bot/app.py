@@ -31,7 +31,7 @@ FALLBACK = "Sorry, I couldn't put together an answer. Please contact AcmeShop su
 
 
 def defenses() -> set[str]:
-    raw = os.environ.get("RAG_DEFENSES", "sanitize,isolate,harden,guard")
+    raw = os.environ.get("RAG_DEFENSES", "none")
     return set() if raw.strip() in ("", "none") else {d.strip() for d in raw.split(",")}
 
 
