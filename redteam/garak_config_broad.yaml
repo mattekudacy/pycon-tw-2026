@@ -6,7 +6,7 @@ plugins:
 system:
   parallel_attempts: 8
 run:
-  soft_probe_prompt_cap: 25   # cost control: nemotron takes ~10s/prompt and promptinject cannot run in parallel
+  soft_probe_prompt_cap: 15   # cost control. First nightly (cap 25, ran alongside other jobs) did 1161 attempts in 120 min and timed out before promptinject/latentinjection/misleading
   spec:
     include:
       - probes.promptinject
@@ -15,7 +15,8 @@ run:
       - probes.latentinjection
       - probes.encoding
       - probes.misleading
-    exclude: []
+    exclude:
+      - probes.dan.Ablation_Dan_11_0   # ignores the prompt cap: always 127 prompts
   generations: 1
 reporting:
   report_dir: runs

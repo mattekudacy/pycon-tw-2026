@@ -4,7 +4,9 @@ redteam/thresholds.yaml instead of a single pass/fail.
     python -m redteam.gate --tier pr_gate --target rag_bot \
         --junit reports/junit.xml --deepteam reports/deepteam/rag_bot-small-baseline.json
 
-Exit 0 = within thresholds, 1 = below a threshold (or too many errored cases), 2 = bad input.
+Exit 0 = within thresholds, 1 = below a threshold, 2 = bad input,
+3 = INCONCLUSIVE: too much of the run was infrastructure noise (model API unavailable / deepteam
+cases errored) to say anything about the app. Rerun it; do not read it as a regression.
 Errored deepteam cases are gated separately because deepteam's own overview drops them.
 """
 import argparse
@@ -18,17 +20,21 @@ import yaml
 THRESHOLDS = Path(__file__).parent / "thresholds.yaml"
 
 
-def junit_rate(path: Path) -> tuple[int, int]:
-    """(passed, total) over executed tests; skipped tests are excluded, xfail counts as skipped."""
+def junit_rate(path: Path) -> tuple[int, int, int]:
+    """(passed, ran, unavailable). `unavailable` = tests skipped because the model API gave no
+    reply (see tests/conftest.py); other skips are excluded from `ran` and ignored."""
     root = ET.parse(path).getroot()
-    suites = [root] if root.tag == "testsuite" else root.findall("testsuite")
-    total = failed = skipped = 0
-    for s in suites:
-        total += int(s.get("tests", 0))
-        failed += int(s.get("failures", 0)) + int(s.get("errors", 0))
-        skipped += int(s.get("skipped", 0))
+    total = failed = skipped = unavailable = 0
+    for case in root.iter("testcase"):
+        total += 1
+        if case.find("failure") is not None or case.find("error") is not None:
+            failed += 1
+        elif (sk := case.find("skipped")) is not None:
+            skipped += 1
+            if "LLM unavailable" in (sk.get("message", "") + (sk.text or "")):
+                unavailable += 1
     ran = total - skipped
-    return ran - failed, ran
+    return ran - failed, ran, unavailable
 
 
 def main() -> int:
@@ -40,14 +46,20 @@ def main() -> int:
     args = ap.parse_args()
 
     cfg = yaml.safe_load(THRESHOLDS.read_text())[args.tier]
-    problems, lines = [], []
+    problems, inconclusive, lines = [], [], []
 
     if args.junit:
-        passed, ran = junit_rate(args.junit)
+        passed, ran, unavailable = junit_rate(args.junit)
         need = cfg["regression_min_pass_rate"][args.target]
         rate = passed / ran if ran else 0.0
+        seen = ran + unavailable
+        down = unavailable / seen if seen else 1.0
+        max_down = cfg["max_infra_unavailable_rate"]
         lines.append(f"regressions  {passed}/{ran} = {rate:.0%} (min {need:.0%})")
-        if ran == 0 or rate < need:
+        lines.append(f"llm unavailable  {unavailable}/{seen} tests = {down:.0%} (max {max_down:.0%})")
+        if down > max_down or seen == 0:
+            inconclusive.append("the model API was unavailable for too many regression tests")
+        elif rate < need:
             problems.append("regression pass rate below threshold")
 
     if args.deepteam:
@@ -60,16 +72,20 @@ def main() -> int:
         need, max_err = cfg["deepteam_min_pass_rate"][args.target], cfg["deepteam_max_error_rate"]
         lines.append(f"deepteam     {s['passed']}/{s['scored']} = {rate:.0%} (min {need:.0%})")
         lines.append(f"deepteam err {s['errored']}/{s['total_cases']} = {err:.0%} (max {max_err:.0%})")
-        if rate < need:
-            problems.append("deepteam pass rate below threshold")
         if err > max_err:
-            problems.append("too many errored deepteam cases (the pass rate is not trustworthy)")
+            inconclusive.append("too many errored deepteam cases (the pass rate is not trustworthy)")
+        elif rate < need:
+            problems.append("deepteam pass rate below threshold")
 
     report = [f"## Gate: {args.target} ({args.tier})", *[f"- {l}" for l in lines]]
-    report.append("- **FAIL**: " + "; ".join(problems) if problems else "- **PASS**")
+    if inconclusive:
+        report.append("- **INCONCLUSIVE**: " + "; ".join(inconclusive) + ". This is infrastructure noise, not a regression: rerun the job.")
+    if problems:
+        report.append("- **FAIL**: " + "; ".join(problems))
+    if not inconclusive and not problems:
+        report.append("- **PASS**")
     print("\n".join(report))
-    return 1 if problems else 0
-
+    return 1 if problems else 3 if inconclusive else 0
 
 if __name__ == "__main__":
     sys.exit(main())

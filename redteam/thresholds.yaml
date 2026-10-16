@@ -19,6 +19,9 @@ pr_gate:
     rag_bot: 0.8
     agent_bot: 0.8
   deepteam_max_error_rate: 0.25
+  # Share of regression tests that may be skipped because the model API was unreachable before the
+  # gate calls the run INCONCLUSIVE instead of pass/fail.
+  max_infra_unavailable_rate: 0.25
 
 # The nightly run never blocks anything; it only produces reports.
 nightly: {}

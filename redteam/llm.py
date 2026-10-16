@@ -7,6 +7,7 @@ deterministic, and immune to rate limits.
 import hashlib
 import json
 import os
+import random
 import time
 from pathlib import Path
 
@@ -29,6 +30,16 @@ def _client() -> OpenAI:
     )
 
 
+class LLMUnavailable(RuntimeError):
+    """The model API gave no usable reply after all retries (rate limit, outage, empty replies).
+    This is an infrastructure problem, not a verdict about the app, so tests and the CI gate
+    report it separately from a failed assertion."""
+
+
+def _backoff(attempt: int) -> None:
+    time.sleep(min(2 ** attempt, 45) * random.uniform(0.7, 1.3))  # jitter: parallel jobs must not retry in lockstep
+
+
 def _cache_path(model: str, temperature: float, messages: list[dict]) -> Path:
     key = hashlib.sha256(json.dumps([model, temperature, messages], sort_keys=True).encode()).hexdigest()
     return CACHE_DIR / f"{key}.json"
@@ -45,7 +56,7 @@ def chat(messages: list[dict], model: str | None = None, temperature: float = 0.
     if cache_enabled() and path.exists():
         return json.loads(path.read_text())["text"]
     text = ""
-    for attempt in range(6):  # cloud rate limits (429) and empty reasoning-only replies are transient
+    for attempt in range(8):  # cloud rate limits (429) and empty reasoning-only replies are transient
         try:
             resp = _client().chat.completions.create(
                 model=model, messages=messages, temperature=temperature, seed=0,
@@ -56,9 +67,9 @@ def chat(messages: list[dict], model: str | None = None, temperature: float = 0.
             text = ""
         if text:
             break
-        time.sleep(min(2 ** attempt, 20))
+        _backoff(attempt)
     if not text:
-        raise RuntimeError(f"no completion from {model} after retries; not caching")
+        raise LLMUnavailable(f"no completion from {model} after retries; not caching")
     if cache_enabled():
         CACHE_DIR.mkdir(exist_ok=True)
         path.write_text(json.dumps({"model": model, "messages": messages, "text": text}))
@@ -75,7 +86,7 @@ def chat_tools(messages: list[dict], tools: list[dict], model: str | None = None
     if cache_enabled() and path.exists():
         return json.loads(path.read_text())["message"]
     msg = None
-    for attempt in range(6):
+    for attempt in range(8):
         try:
             resp = _client().chat.completions.create(
                 model=model, messages=messages, tools=tools or None, temperature=0.0, seed=0, max_tokens=4096
@@ -92,9 +103,9 @@ def chat_tools(messages: list[dict], tools: list[dict], model: str | None = None
                 break
         except (RateLimitError, APIConnectionError, APITimeoutError):
             pass
-        time.sleep(min(2 ** attempt, 20))
+        _backoff(attempt)
     if msg is None:
-        raise RuntimeError(f"no completion from {model} after retries; not caching")
+        raise LLMUnavailable(f"no completion from {model} after retries; not caching")
     if cache_enabled():
         CACHE_DIR.mkdir(exist_ok=True)
         path.write_text(json.dumps({"model": model, "message": msg}))
