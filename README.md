@@ -105,7 +105,7 @@ calibration set: use a deterministic check for the secrets you know about.
 | `make calibrate` | how far to trust the judge | ~2 min (one judge) | ~3 s |
 | `make report-prebaked` | prints the saved reports | n/a | instant |
 | `make attack-full` | full deepteam, `rag_bot` | ~44 min in CI (one run, under load) | n/a |
-| `make scan-broad` | broad garak scan | not measured (first run timed out at 120 min) | n/a |
+| `make scan-broad` | broad garak scan, core families (486 attacks) | not yet measured end to end (see `docs/garak-coverage.md`) | n/a |
 
 Cold times were measured on a quiet account against Ollama Cloud. Under load they were 3-5x slower.
 We did not measure dollar cost: Ollama Cloud is plan/usage based. The committed demo cache is 151
@@ -181,8 +181,10 @@ Two tiers (`.github/workflows/`), both calling the commands directly (not `make`
   The regression suite is the real gate; the deepteam sample is a coarse canary (one broken bot scored
   83% on it, above the 80% floor).
 - **`nightly-scan.yml`**: broad garak scan + full deepteam run, never blocks a merge, uploads reports.
-  **Manual only** (Actions -> Nightly scan -> Run workflow). The first run took ~2.5 h and its garak
-  job timed out, so the garak config has been trimmed (cap 15, one probe dropped) and is unmeasured.
+  **Manual only** (Actions -> Nightly scan -> Run workflow). garak runs as **one job per family**
+  (`redteam/garak_families.json`), each with its own time limit; `encoding` and `goodside` are opt-in. The first
+  nightly timed out because of two bugs of ours (retrying empty replies, no client timeout), now fixed; the
+  restructured nightly has not yet been run end to end.
 
 Things to know:
 - Repository secrets are **not exposed to PRs from forks**, so the gate cannot run on external

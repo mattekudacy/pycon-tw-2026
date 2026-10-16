@@ -19,7 +19,7 @@ scan:
 	uv run garak --config redteam/garak_config.yaml
 
 scan-broad:
-	uv run garak --config redteam/garak_config_broad.yaml
+	REDTEAM_MAX_TOKENS=1500 uv run garak --config redteam/garak_config_broad.yaml
 
 # Beat: deepteam against the RAG bot. Small batch (baseline probes, no attack enhancement).
 # Results: reports/deepteam/<target>-small-baseline.json
