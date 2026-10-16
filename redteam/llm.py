@@ -42,9 +42,13 @@ def cache_enabled() -> bool:
 
 
 def _client() -> OpenAI:
+    # The SDK default is a 10-minute timeout with 2 retries. One hung connection then froze a whole
+    # sequential probe (promptinject) for ten minutes; a 4096-token reply takes ~95 s at most.
     return OpenAI(
         base_url=os.getenv("LLM_BASE_URL", "https://ollama.com/v1"),
         api_key=os.environ.get("OLLAMA_API_KEY") or os.getenv("LLM_API_KEY", ""),
+        timeout=float(os.getenv("REDTEAM_TIMEOUT", "150")),
+        max_retries=1,
     )
 
 
@@ -54,12 +58,26 @@ class LLMUnavailable(RuntimeError):
     report it separately from a failed assertion."""
 
 
+class EmptyCompletion(LLMUnavailable):
+    """The model spent its whole token budget thinking and returned no answer (finish_reason=length).
+    With temperature 0 and a fixed seed a retry gives the same result, so we do not retry: an
+    attempt that cost 93 s used to cost minutes of backoff on top."""
+
+
+def max_tokens_default() -> int:
+    """REDTEAM_MAX_TOKENS lowers the reply budget (the nightly garak scan uses 1500)."""
+    return int(os.getenv("REDTEAM_MAX_TOKENS", "4096"))
+
+
 def _backoff(attempt: int) -> None:
     time.sleep(min(2 ** attempt, 45) * random.uniform(0.7, 1.3))  # jitter: parallel jobs must not retry in lockstep
 
 
 def _cache_path(model: str, temperature: float, messages: list[dict]) -> Path:
-    key = hashlib.sha256(json.dumps([model, temperature, messages], sort_keys=True).encode()).hexdigest()
+    parts = [model, temperature, messages]
+    if max_tokens_default() != 4096:  # keeps every cache entry made at the default budget valid
+        parts.append(max_tokens_default())
+    key = hashlib.sha256(json.dumps(parts, sort_keys=True).encode()).hexdigest()
     return CACHE_DIR / f"{key}.json"
 
 
@@ -81,9 +99,11 @@ def chat(messages: list[dict], model: str | None = None, temperature: float = 0.
         try:
             resp = _client().chat.completions.create(
                 model=model, messages=messages, temperature=temperature, seed=0,
-                max_tokens=4096,  # reasoning models spend tokens thinking; leave headroom
+                max_tokens=max_tokens_default(),  # reasoning models spend tokens thinking; leave headroom
             )
             text = resp.choices[0].message.content or ""
+            if not text and resp.choices[0].finish_reason == "length":
+                raise EmptyCompletion(f"{model} used all {max_tokens_default()} tokens thinking and returned no answer")
         except (RateLimitError, APIConnectionError, APITimeoutError):
             text = ""
         if text:
@@ -113,9 +133,12 @@ def chat_tools(messages: list[dict], tools: list[dict], model: str | None = None
     for attempt in range(8):
         try:
             resp = _client().chat.completions.create(
-                model=model, messages=messages, tools=tools or None, temperature=0.0, seed=0, max_tokens=4096
+                model=model, messages=messages, tools=tools or None, temperature=0.0, seed=0,
+                max_tokens=max_tokens_default(),
             )
             m = resp.choices[0].message
+            if not (m.content or "").strip() and not m.tool_calls and resp.choices[0].finish_reason == "length":
+                raise EmptyCompletion(f"{model} used all {max_tokens_default()} tokens thinking and returned no answer")
             if (m.content or "").strip() or m.tool_calls:
                 msg = {
                     "content": m.content or "",

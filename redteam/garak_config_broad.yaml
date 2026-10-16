@@ -9,19 +9,35 @@ run:
   seed: 42   # without a seed garak samples different prompts every run, so the response cache never hits
   soft_probe_prompt_cap: 15   # cost control. First nightly (cap 25, ran alongside other jobs) did 1161 attempts in 120 min and timed out before promptinject/latentinjection/misleading
   spec:
+# Core families only (redteam/garak_families.json is the source of truth; the nightly runs one job per
+# family). encoding and goodside are opt-in: `include_slow_garak` in the workflow, or --probes encoding.
     include:
-      - probes.promptinject
-      - probes.dan
-      - probes.goodside
-      - probes.latentinjection
-      - probes.encoding
-      - probes.misleading
-      # data / secret extraction families (see docs/garak-coverage.md for what each really tests)
-      - probes.apikey
-      - probes.leakreplay
-      - probes.sysprompt_extraction
-    exclude:
-      - probes.dan.Ablation_Dan_11_0   # ignores the prompt cap: always 127 prompts
+      - probes.promptinject.HijackHateHumans
+      - probes.promptinject.HijackKillHumans
+      - probes.promptinject.HijackLongPrompt
+      - probes.dan.AutoDANCached
+      - probes.dan.DanInTheWild
+      - probes.latentinjection.LatentInjectionFactSnippetEiffel
+      - probes.latentinjection.LatentInjectionFactSnippetLegal
+      - probes.latentinjection.LatentInjectionReport
+      - probes.latentinjection.LatentInjectionResume
+      - probes.latentinjection.LatentInjectionTranslationEnFr
+      - probes.latentinjection.LatentInjectionTranslationEnZh
+      - probes.latentinjection.LatentJailbreak
+      - probes.latentinjection.LatentWhoisSnippet
+      - probes.sysprompt_extraction.SystemPromptExtraction
+      - probes.apikey.GetKey
+      - probes.apikey.CompleteKey
+      - probes.leakreplay.GuardianCloze
+      - probes.leakreplay.GuardianComplete
+      - probes.leakreplay.LiteratureCloze
+      - probes.leakreplay.LiteratureComplete
+      - probes.leakreplay.NYTCloze
+      - probes.leakreplay.NYTComplete
+      - probes.leakreplay.PotterCloze
+      - probes.leakreplay.PotterComplete
+      - probes.misleading.FalseAssertion
+    exclude: []
   generations: 1
 reporting:
   report_dir: runs

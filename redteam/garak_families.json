@@ -1,0 +1,20 @@
+[
+  {"family": "promptinject", "default": true,  "timeout": 45,
+   "probes": "promptinject.HijackHateHumans,promptinject.HijackKillHumans,promptinject.HijackLongPrompt"},
+  {"family": "dan", "default": true, "timeout": 30,
+   "probes": "dan.AutoDANCached,dan.DanInTheWild"},
+  {"family": "latentinjection", "default": true, "timeout": 45,
+   "probes": "latentinjection.LatentInjectionFactSnippetEiffel,latentinjection.LatentInjectionFactSnippetLegal,latentinjection.LatentInjectionReport,latentinjection.LatentInjectionResume,latentinjection.LatentInjectionTranslationEnFr,latentinjection.LatentInjectionTranslationEnZh,latentinjection.LatentJailbreak,latentinjection.LatentWhoisSnippet"},
+  {"family": "sysprompt_extraction", "default": true, "timeout": 20,
+   "probes": "sysprompt_extraction.SystemPromptExtraction"},
+  {"family": "apikey", "default": true, "timeout": 20,
+   "probes": "apikey.GetKey,apikey.CompleteKey"},
+  {"family": "leakreplay", "default": true, "timeout": 30,
+   "probes": "leakreplay.GuardianCloze,leakreplay.GuardianComplete,leakreplay.LiteratureCloze,leakreplay.LiteratureComplete,leakreplay.NYTCloze,leakreplay.NYTComplete,leakreplay.PotterCloze,leakreplay.PotterComplete"},
+  {"family": "misleading", "default": true, "timeout": 25,
+   "probes": "misleading.FalseAssertion"},
+  {"family": "goodside", "default": false, "timeout": 25,
+   "probes": "goodside.Tag,goodside.ThreatenJSON,goodside.WhoIsRiley"},
+  {"family": "encoding", "default": false, "timeout": 90,
+   "probes": "encoding"}
+]

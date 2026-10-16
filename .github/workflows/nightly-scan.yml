@@ -7,6 +7,11 @@ name: Nightly scan
 # add back:  schedule:  - cron: "17 18 * * *"   # 02:17 Asia/Taipei
 on:
   workflow_dispatch:
+    inputs:
+      include_slow_garak:
+        description: "Also run the garak encoding and goodside families (slow, least tied to the talk)"
+        type: boolean
+        default: false
 
 concurrency:
   group: nightly-scan
@@ -16,17 +21,44 @@ permissions:
   contents: read
 
 jobs:
-  garak:
-    # Runs after the deepteam jobs: everything shares one model-API rate limit, and a first run
-    # with all four jobs at once starved each other (garak timed out after 120 min).
-    needs: deepteam
-    if: ${{ !cancelled() }}
+  plan:
+    # One garak job per family (redteam/garak_families.json), so a slow or hung family cannot
+    # starve the rest and every family gets its own time limit and its own report.
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: pick
+        env:
+          ALL: ${{ inputs.include_slow_garak }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          fams = json.load(open("redteam/garak_families.json"))
+          if os.environ["ALL"] != "true":
+              fams = [f for f in fams if f["default"]]
+          print("matrix=" + json.dumps({"include": fams}, separators=(",", ":")))
+          PY
+
+  garak:
+    # Runs after the deepteam jobs: everything shares one model-API rate limit.
+    needs: [plan, deepteam]
+    if: ${{ !cancelled() }}
+    name: garak (${{ matrix.family }})
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     env:
       OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
       LLM_BASE_URL: https://ollama.com/v1
       TARGET_MODEL: nemotron-3-nano:30b
+      # A reply that spends 1500 tokens thinking counts as "no answer" (see docs/garak-coverage.md).
+      REDTEAM_MAX_TOKENS: "1500"
       PYTHONPATH: .
     steps:
       - uses: actions/checkout@v4
@@ -35,13 +67,15 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
       - run: uv sync --frozen
-      - name: "Broad garak scan (chatbot only; garak sees text in, text out, nothing app-level)"
+      - name: "garak ${{ matrix.family }} (chatbot only; garak sees text in, text out, nothing app-level)"
         continue-on-error: true
-        run: XDG_DATA_HOME="$PWD/reports" uv run garak --config redteam/garak_config_broad.yaml
+        run: |
+          XDG_DATA_HOME="$PWD/reports" uv run garak --config redteam/garak_config_broad.yaml \
+            --probes "${{ matrix.probes }}" --report_prefix "${{ matrix.family }}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: nightly-garak
+          name: nightly-garak-${{ matrix.family }}
           path: reports/garak/
           retention-days: 30
 
