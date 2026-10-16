@@ -35,5 +35,6 @@ testpaths = ["tests"]
 markers = [
   "security: deterministic regression tests pinned to red-team findings",
   "agent: tool-call assertions on agent_bot",
+  "sycophancy: two-turn pushback test (in make regress, not regress-fast)",
   "quality: LLM-judged faithfulness/relevancy, separates attacks from low quality",
 ]

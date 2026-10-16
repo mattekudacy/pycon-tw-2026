@@ -38,6 +38,7 @@ jobs:
     timeout-minutes: 25
     strategy:
       fail-fast: false
+      max-parallel: 2 # all jobs share one model-API rate limit; 3 at once starved each other
       matrix:
         target: [chatbot, rag_bot, agent_bot]
     env:
@@ -91,7 +92,9 @@ jobs:
           JUNIT=""; [ -f reports/junit.xml ] && JUNIT="--junit reports/junit.xml"
           uv run python -m redteam.gate --tier pr_gate --target ${{ matrix.target }} $JUNIT \
             --deepteam reports/deepteam/${{ matrix.target }}-small-baseline.json | tee -a "$GITHUB_STEP_SUMMARY"
-          exit "${PIPESTATUS[0]}"
+          code="${PIPESTATUS[0]}"
+          if [ "$code" = "3" ]; then echo "::warning::Gate INCONCLUSIVE (model API unavailable or too many errored cases). Rerun this job; it is not a regression."; fi
+          exit "$code"
 
       - name: Upload reports
         if: always()

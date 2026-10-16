@@ -7,6 +7,7 @@ deterministic, and immune to rate limits.
 import hashlib
 import json
 import os
+import random
 import time
 from pathlib import Path
 
@@ -18,6 +19,24 @@ load_dotenv()
 CACHE_DIR = Path(__file__).parent / "cache"
 
 
+def offline() -> bool:
+    """REDTEAM_OFFLINE=1: replay from the cache only. A cache miss fails at once with a clear error
+    instead of retrying against a dead network (use when the venue wifi is down)."""
+    return os.getenv("REDTEAM_OFFLINE", "0") == "1"
+
+
+def _hit(path: Path) -> None:
+    """For curating the committed cache: REDTEAM_CACHE_HITLOG=file appends every entry that is read."""
+    log = os.getenv("REDTEAM_CACHE_HITLOG")
+    if log:
+        with open(log, "a") as f:
+            f.write(path.name + "\n")
+
+
+def _miss(model: str) -> "LLMUnavailable":
+    return LLMUnavailable(f"offline mode (REDTEAM_OFFLINE=1): no cached reply for this request to {model}")
+
+
 def cache_enabled() -> bool:
     return os.getenv("REDTEAM_CACHE", "1") != "0"
 
@@ -27,6 +46,16 @@ def _client() -> OpenAI:
         base_url=os.getenv("LLM_BASE_URL", "https://ollama.com/v1"),
         api_key=os.environ.get("OLLAMA_API_KEY") or os.getenv("LLM_API_KEY", ""),
     )
+
+
+class LLMUnavailable(RuntimeError):
+    """The model API gave no usable reply after all retries (rate limit, outage, empty replies).
+    This is an infrastructure problem, not a verdict about the app, so tests and the CI gate
+    report it separately from a failed assertion."""
+
+
+def _backoff(attempt: int) -> None:
+    time.sleep(min(2 ** attempt, 45) * random.uniform(0.7, 1.3))  # jitter: parallel jobs must not retry in lockstep
 
 
 def _cache_path(model: str, temperature: float, messages: list[dict]) -> Path:
@@ -43,9 +72,12 @@ def chat(messages: list[dict], model: str | None = None, temperature: float = 0.
     model = model or os.environ.get("TARGET_MODEL", "nemotron-3-nano:30b")
     path = _cache_path(model, temperature, messages)
     if cache_enabled() and path.exists():
+        _hit(path)
         return json.loads(path.read_text())["text"]
+    if offline():
+        raise _miss(model)
     text = ""
-    for attempt in range(6):  # cloud rate limits (429) and empty reasoning-only replies are transient
+    for attempt in range(8):  # cloud rate limits (429) and empty reasoning-only replies are transient
         try:
             resp = _client().chat.completions.create(
                 model=model, messages=messages, temperature=temperature, seed=0,
@@ -56,9 +88,9 @@ def chat(messages: list[dict], model: str | None = None, temperature: float = 0.
             text = ""
         if text:
             break
-        time.sleep(min(2 ** attempt, 20))
+        _backoff(attempt)
     if not text:
-        raise RuntimeError(f"no completion from {model} after retries; not caching")
+        raise LLMUnavailable(f"no completion from {model} after retries; not caching")
     if cache_enabled():
         CACHE_DIR.mkdir(exist_ok=True)
         path.write_text(json.dumps({"model": model, "messages": messages, "text": text}))
@@ -73,9 +105,12 @@ def chat_tools(messages: list[dict], tools: list[dict], model: str | None = None
     model = model or os.environ.get("TARGET_MODEL", "nemotron-3-nano:30b")
     path = _cache_path(model, 0.0, [messages, tools])
     if cache_enabled() and path.exists():
+        _hit(path)
         return json.loads(path.read_text())["message"]
+    if offline():
+        raise _miss(model)
     msg = None
-    for attempt in range(6):
+    for attempt in range(8):
         try:
             resp = _client().chat.completions.create(
                 model=model, messages=messages, tools=tools or None, temperature=0.0, seed=0, max_tokens=4096
@@ -92,9 +127,9 @@ def chat_tools(messages: list[dict], tools: list[dict], model: str | None = None
                 break
         except (RateLimitError, APIConnectionError, APITimeoutError):
             pass
-        time.sleep(min(2 ** attempt, 20))
+        _backoff(attempt)
     if msg is None:
-        raise RuntimeError(f"no completion from {model} after retries; not caching")
+        raise LLMUnavailable(f"no completion from {model} after retries; not caching")
     if cache_enabled():
         CACHE_DIR.mkdir(exist_ok=True)
         path.write_text(json.dumps({"model": model, "message": msg}))

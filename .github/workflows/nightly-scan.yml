@@ -2,9 +2,10 @@ name: Nightly scan
 
 # Slow and expensive: broad garak scan + full deepteam run. Never blocks a merge.
 # Uploads the risk reports as workflow artifacts.
+# MANUAL ONLY for now (Actions tab -> Nightly scan -> Run workflow, or `gh workflow run nightly-scan.yml`):
+# a first run used ~2.5 h of runner time and a lot of model-API quota. To run it every night again,
+# add back:  schedule:  - cron: "17 18 * * *"   # 02:17 Asia/Taipei
 on:
-  schedule:
-    - cron: "17 18 * * *" # 02:17 Asia/Taipei
   workflow_dispatch:
 
 concurrency:
@@ -16,8 +17,12 @@ permissions:
 
 jobs:
   garak:
+    # Runs after the deepteam jobs: everything shares one model-API rate limit, and a first run
+    # with all four jobs at once starved each other (garak timed out after 120 min).
+    needs: deepteam
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 150
     env:
       OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
       LLM_BASE_URL: https://ollama.com/v1
@@ -45,6 +50,7 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         target: [chatbot, rag_bot, agent_bot]
     env:

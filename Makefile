@@ -5,7 +5,7 @@ export DEEPTEAM_TELEMETRY_OPT_OUT := YES
 export DEEPEVAL_TELEMETRY_OPT_OUT := YES
 export XDG_DATA_HOME := $(CURDIR)/reports
 
-.PHONY: install test scan scan-broad attack attack-full regress regress-fast agent-test calibrate report report-prebaked
+.PHONY: install test scan scan-broad attack attack-full regress regress-fast agent-test calibrate report report-prebaked compare
 
 install:
 	uv sync
@@ -22,9 +22,12 @@ scan-broad:
 	uv run garak --config redteam/garak_config_broad.yaml
 
 # Beat: deepteam against the RAG bot. Small batch (baseline probes, no attack enhancement).
-# Results: reports/deepteam/rag_bot-small-baseline.json
+# Results: reports/deepteam/<target>-small-baseline.json
+# Your own app: make attack TARGET=my_package.my_module:ask PURPOSE="One sentence about the app."
+TARGET ?= rag_bot
+PURPOSE ?= A customer-support assistant for AcmeShop that answers order, shipping and return questions.
 attack:
-	uv run python -m redteam.deepteam_run --target rag_bot --baseline --per-type 3
+	uv run python -m redteam.deepteam_run --target "$(TARGET)" --purpose "$(PURPOSE)" --baseline --per-type 3
 
 # Nightly-size run (slow, costs more).
 attack-full:
@@ -34,7 +37,7 @@ attack-full:
 # regress-fast = deterministic security checks only (about a second). regress = plus
 # faithfulness/relevancy (LLM-judged; ~2.5 min cold, seconds once the cache is warm).
 regress-fast:
-	uv run pytest tests/regressions -m security -q -p no:cacheprovider
+	uv run python -m redteam.regress_fast
 
 regress:
 	uv run pytest tests/regressions -q -p no:cacheprovider
@@ -56,3 +59,7 @@ report-prebaked:
 JUDGES ?= $(or $(JUDGE_MODEL),gpt-oss:20b)
 calibrate:
 	uv run python -m redteam.calibrate --judge $(JUDGES)
+
+# Beat: a SECURITY failure and a QUALITY failure side by side (before-fix behaviour, from the cache).
+compare:
+	uv run python -m redteam.compare

@@ -47,3 +47,16 @@ def test_sanitize_strips_hidden_comments(monkeypatch):
     monkeypatch.setenv("RAG_DEFENSES", "sanitize")
     assert not any("NOTE TO AI ASSISTANT" in c for c in retrieve("How long does shipping take?"))
     assert any("3-5 business days" in c for c in retrieve("How long does shipping take?"))
+
+
+def test_offline_mode_fails_fast_on_cache_miss(monkeypatch, tmp_path):
+    import pytest
+
+    from redteam import llm
+
+    monkeypatch.setattr(llm, "CACHE_DIR", tmp_path)
+    monkeypatch.setenv("REDTEAM_OFFLINE", "1")
+    with pytest.raises(llm.LLMUnavailable, match="offline mode"):
+        llm.chat([{"role": "user", "content": "never cached"}])
+    with pytest.raises(llm.LLMUnavailable, match="offline mode"):
+        llm.chat_tools([{"role": "user", "content": "never cached"}], [])
