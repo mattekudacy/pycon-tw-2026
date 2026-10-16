@@ -19,6 +19,16 @@ load_dotenv()
 CACHE_DIR = Path(__file__).parent / "cache"
 
 
+def offline() -> bool:
+    """REDTEAM_OFFLINE=1: replay from the cache only. A cache miss fails at once with a clear error
+    instead of retrying against a dead network (use when the venue wifi is down)."""
+    return os.getenv("REDTEAM_OFFLINE", "0") == "1"
+
+
+def _miss(model: str) -> "LLMUnavailable":
+    return LLMUnavailable(f"offline mode (REDTEAM_OFFLINE=1): no cached reply for this request to {model}")
+
+
 def cache_enabled() -> bool:
     return os.getenv("REDTEAM_CACHE", "1") != "0"
 
@@ -55,6 +65,8 @@ def chat(messages: list[dict], model: str | None = None, temperature: float = 0.
     path = _cache_path(model, temperature, messages)
     if cache_enabled() and path.exists():
         return json.loads(path.read_text())["text"]
+    if offline():
+        raise _miss(model)
     text = ""
     for attempt in range(8):  # cloud rate limits (429) and empty reasoning-only replies are transient
         try:
@@ -85,6 +97,8 @@ def chat_tools(messages: list[dict], tools: list[dict], model: str | None = None
     path = _cache_path(model, 0.0, [messages, tools])
     if cache_enabled() and path.exists():
         return json.loads(path.read_text())["message"]
+    if offline():
+        raise _miss(model)
     msg = None
     for attempt in range(8):
         try:

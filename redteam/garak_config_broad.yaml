@@ -6,6 +6,7 @@ plugins:
 system:
   parallel_attempts: 8
 run:
+  seed: 42   # without a seed garak samples different prompts every run, so the response cache never hits
   soft_probe_prompt_cap: 15   # cost control. First nightly (cap 25, ran alongside other jobs) did 1161 attempts in 120 min and timed out before promptinject/latentinjection/misleading
   spec:
     include:

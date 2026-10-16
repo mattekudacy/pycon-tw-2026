@@ -6,6 +6,7 @@ plugins:
 system:
   parallel_attempts: 8
 run:
+  seed: 42   # without a seed garak samples different prompts every run, so the response cache never hits
   soft_probe_prompt_cap: 8   # keeps the live scan to ~1-2 min
   spec:
     include:
