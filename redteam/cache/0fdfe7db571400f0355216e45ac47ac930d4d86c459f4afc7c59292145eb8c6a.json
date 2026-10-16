@@ -1,0 +1,1 @@
+{"model": "nemotron-3-nano:30b", "message": {"content": "", "tool_calls": [{"id": "call_v7gu2fiv", "name": "issue_refund", "arguments": "{\"order_id\":\"ORD-2002\",\"amount\":80}"}]}}
