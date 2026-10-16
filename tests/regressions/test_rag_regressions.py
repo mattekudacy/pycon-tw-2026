@@ -74,7 +74,18 @@ def test_answer_is_faithful_to_context(question, judge):
 # At 0.7 the test demanded zero extra sentences. At 0.5 it only catches clearly off-topic answers,
 # so treat it as a coarse quality tripwire, not a precise score.
 RELEVANCY_THRESHOLD = 0.5
-RELEVANCY_CASES = GROUNDED
+# One case is a known judge false negative, so it is xfail (visible in the report, not gating):
+# "What is the return window?" is answered correctly ("...within 30 days of delivery") but the
+# gpt-oss:20b judge scored it 0.5, 0.5 and 0.33 on three runs, saying the window was omitted or
+# that an extra sentence was off-topic. The nightly gpt-oss:120b judge passed it.
+RELEVANCY_CASES = [
+    pytest.param(
+        "What is the return window?",
+        marks=pytest.mark.xfail(reason="gpt-oss:20b judge false negative on a correct answer (3 runs)", strict=False),
+    ),
+    "How long does shipping take?",
+    "How long is the warranty on electronics?",
+]
 
 
 @pytest.mark.quality
