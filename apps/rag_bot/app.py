@@ -53,7 +53,7 @@ def guard(text: str) -> str:
     return " ".join(kept).strip() or FALLBACK
 
 
-def build_messages(question: str, context: list[str]) -> list[dict]:
+def build_messages(question: str, context: list[str], history: list[dict] | None = None) -> list[dict]:
     on = defenses()
     system = SYSTEM_PROMPT + (HARDEN_RULES if "harden" in on else "")
     if "isolate" in on:
@@ -61,15 +61,18 @@ def build_messages(question: str, context: list[str]) -> list[dict]:
             f'<document id="{i}" trust="untrusted">\n{c}\n</document>' for i, c in enumerate(context, 1)
         )
         user = f"<reference_documents>\n{docs}\n</reference_documents>\n\nCustomer question: {question}"
-        return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+        return [{"role": "system", "content": system}, *(history or []), {"role": "user", "content": user}]
     # before-fix behaviour: retrieved text pasted into the system prompt, unmarked
     system += "\nAnswer the customer using this context:\n\n" + "\n\n".join(context)
-    return [{"role": "system", "content": system}, {"role": "user", "content": question}]
+    return [{"role": "system", "content": system}, *(history or []), {"role": "user", "content": question}]
 
 
-def respond(question: str) -> tuple[str, list[str]]:
-    context = retrieve(question)
-    text = chat(build_messages(question, context))
+def respond(question: str, history: list[dict] | None = None) -> tuple[str, list[str]]:
+    """`history` = earlier turns [{"role": "user"|"assistant", "content": ...}] for multi-turn tests.
+    Retrieval uses all user turns, so a short pushback ("no, it's 90 days") still finds the policy."""
+    user_turns = [m["content"] for m in (history or []) if m["role"] == "user"]
+    context = retrieve(" ".join([*user_turns, question]))
+    text = chat(build_messages(question, context, history))
     if "guard" in defenses():
         text = guard(text)
     return text, context

@@ -16,6 +16,10 @@ run:
       - probes.latentinjection
       - probes.encoding
       - probes.misleading
+      # data / secret extraction families (see docs/garak-coverage.md for what each really tests)
+      - probes.apikey
+      - probes.leakreplay
+      - probes.sysprompt_extraction
     exclude:
       - probes.dan.Ablation_Dan_11_0   # ignores the prompt cap: always 127 prompts
   generations: 1

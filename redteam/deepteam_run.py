@@ -14,6 +14,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import time
 from pathlib import Path
 
@@ -71,8 +72,8 @@ def simulator() -> JudgeLLM:
     return JudgeLLM(os.environ.get("SIMULATOR_MODEL", "gemma4:31b"))
 
 
-def build(target: str, full: bool):
-    kw = dict(simulator_model=simulator(), evaluation_model=JudgeLLM(), purpose=PURPOSE)
+def build(target: str, full: bool, purpose: str = PURPOSE):
+    kw = dict(simulator_model=simulator(), evaluation_model=JudgeLLM(), purpose=purpose)
     inj = dict(evaluation_guidelines=INJECTION_GUIDELINES, **kw)
     if target == "chatbot":  # no retrieval, no tools: leakage and hallucination only
         vulns = [PromptLeakage(types=["instructions", "secrets_and_credentials"], **kw)]
@@ -85,6 +86,10 @@ def build(target: str, full: bool):
         ]
         if full:
             vulns += [PIILeakage(**kw), ExcessiveAgency(types=["functionality"], **kw)]
+    elif target not in ("rag_bot",):  # your own app: generic checks that need no knowledge of it
+        vulns = [PromptLeakage(types=["instructions", "secrets_and_credentials"], **kw)]
+        if full:
+            vulns += [PIILeakage(**kw), Hallucination(**kw)]
     elif full:
         vulns = [IndirectInstruction(**inj), PIILeakage(**kw), PromptLeakage(**kw), Hallucination(**kw)]
     else:
@@ -98,13 +103,14 @@ def build(target: str, full: bool):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--target", default="rag_bot", choices=["chatbot", "rag_bot", "agent_bot"])
+    ap.add_argument("--target", default="rag_bot", help="chatbot | rag_bot | agent_bot | module:function")
+    ap.add_argument("--purpose", default=PURPOSE, help="one sentence describing the app (the judge uses it)")
     ap.add_argument("--full", action="store_true")
     ap.add_argument("--baseline", action="store_true", help="no attack enhancement: send the plain generated probes")
     ap.add_argument("--per-type", type=int, default=None, help="attacks per vulnerability type")
     args = ap.parse_args()
 
-    vulns, attacks = build(args.target, args.full)
+    vulns, attacks = build(args.target, args.full, args.purpose)
     if args.baseline:
         attacks = None
     t0 = time.time()
@@ -113,13 +119,14 @@ def main():
         vulnerabilities=vulns,
         attacks=attacks,
         attacks_per_vulnerability_type=args.per_type or (3 if args.full else 1),
-        target_purpose=PURPOSE,
+        target_purpose=args.purpose,
         simulator_model=simulator(),
         evaluation_model=JudgeLLM(),
         max_concurrent=3,
     )
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    stem = f"{args.target}-{'full' if args.full else 'small'}{'-baseline' if args.baseline else ''}"
+    name = re.sub(r"[^A-Za-z0-9]+", "_", args.target).strip("_")
+    stem = f"{name}-{'full' if args.full else 'small'}{'-baseline' if args.baseline else ''}"
     dump = assessment.model_dump(mode="json")
     # deepteam's overview silently drops errored cases (and reports "0 errored"), so count them ourselves.
     cases = dump["test_cases"]

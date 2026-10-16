@@ -25,6 +25,14 @@ def offline() -> bool:
     return os.getenv("REDTEAM_OFFLINE", "0") == "1"
 
 
+def _hit(path: Path) -> None:
+    """For curating the committed cache: REDTEAM_CACHE_HITLOG=file appends every entry that is read."""
+    log = os.getenv("REDTEAM_CACHE_HITLOG")
+    if log:
+        with open(log, "a") as f:
+            f.write(path.name + "\n")
+
+
 def _miss(model: str) -> "LLMUnavailable":
     return LLMUnavailable(f"offline mode (REDTEAM_OFFLINE=1): no cached reply for this request to {model}")
 
@@ -64,6 +72,7 @@ def chat(messages: list[dict], model: str | None = None, temperature: float = 0.
     model = model or os.environ.get("TARGET_MODEL", "nemotron-3-nano:30b")
     path = _cache_path(model, temperature, messages)
     if cache_enabled() and path.exists():
+        _hit(path)
         return json.loads(path.read_text())["text"]
     if offline():
         raise _miss(model)
@@ -96,6 +105,7 @@ def chat_tools(messages: list[dict], tools: list[dict], model: str | None = None
     model = model or os.environ.get("TARGET_MODEL", "nemotron-3-nano:30b")
     path = _cache_path(model, 0.0, [messages, tools])
     if cache_enabled() and path.exists():
+        _hit(path)
         return json.loads(path.read_text())["message"]
     if offline():
         raise _miss(model)
