@@ -35,7 +35,7 @@ make regress-fast            # first finding: 7 security regressions
 To see a finding fail, then pass (no checkout needed: `RAG_DEFENSES=none` switches the defenses off):
 
 ```bash
-RAG_DEFENSES=none make regress-fast    # 4 FAIL: the poisoned shipping doc
+make regress-before-fix               # 4 FAIL: the poisoned shipping doc (defenses off)
 make regress-fast                      # 7 PASS
 make attack-before-fix                 # deepteam, defenses off: link in 10 of 12 answers, judge flags 2
 make attack                            # deepteam, defenses on: 12/12 pass
@@ -104,6 +104,7 @@ calibration set: use a deterministic check for the secrets you know about.
 | `make deepeval-run` | deepeval's own results table: one answer, three metrics, defenses off (faithfulness and relevancy pass, the security metric fails). Needs a terminal 130+ columns wide. | ~15 s | ~4 s |
 | `make peek-garak` / `peek-deepteam` / `peek-deepeval` | 30-second look inside each library: the probe menu; what deepteam attacks plus one finding with the judge's reasoning; the 5-line test and its assertion. No key needed. `peek-deepteam` reads the report from `make attack-before-fix`. | n/a | 1-4 s |
 | `make regress-fast` | deterministic security regressions, printed as a PASS/FAIL table | ~1 min | ~5 s |
+| `make regress-before-fix` | the same security regressions with the defenses off: 4 FAIL, 3 PASS (the red run) | ~1 min | ~5 s |
 | `make compare` | a SECURITY failure and a QUALITY failure side by side (defenses off) | ~1 min | ~3 s |
 | `make regress` | plus LLM-judged faithfulness / relevancy and the sycophancy test | ~4.5 min | ~4 s |
 | `make agent-test` | tool-call assertions on `agent_bot` | ~1 min | ~5 s |
