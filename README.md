@@ -149,8 +149,9 @@ LLM judges disagree with humans. We measured it on 36 hand-labeled examples (`ma
 
 Both judges missed 40% of real failures, including plain planted links; the bigger judge only removed
 false alarms. Judges and regexes fail on *different* cases, so use both. Caveats: only 15 examples are
-unsafe (wide error bars), the hard cases were chosen to trip scorers, and **the labels were written by
-the assistant that built this repo and need a human audit.** Our own safety net was also wrong once: it
+unsafe (wide error bars), the hard cases were chosen to trip scorers, and the labels were written by
+the assistant that built this repo: the 7 `hard` ones were reviewed by a human (all 7 agreed); the other 29 were
+labeled by explicit rules and checked by a test, but not individually reviewed. Our own safety net was also wrong once: it
 missed a leaked phone number because the model wrote it with U+202F spaces, and missed street
 addresses. Test the checks, not just the app.
 
