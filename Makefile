@@ -5,7 +5,7 @@ export DEEPTEAM_TELEMETRY_OPT_OUT := YES
 export DEEPEVAL_TELEMETRY_OPT_OUT := YES
 export XDG_DATA_HOME := $(CURDIR)/reports
 
-.PHONY: install test scan scan-broad attack attack-before-fix attack-full regress regress-fast agent-test calibrate report report-prebaked compare
+.PHONY: install test scan scan-broad attack attack-before-fix attack-full regress regress-fast agent-test calibrate report report-prebaked compare peek-garak peek-deepteam peek-deepeval
 
 install:
 	uv sync
@@ -69,3 +69,13 @@ calibrate:
 # Beat: a SECURITY failure and a QUALITY failure side by side (before-fix behaviour, from the cache).
 compare:
 	uv run python -m redteam.compare
+
+# Look inside each library for 30 seconds (no key or network). peek-deepteam needs `make attack-before-fix` once first.
+peek-garak:
+	uv run python -m redteam.peek garak
+
+peek-deepteam:
+	uv run python -m redteam.peek deepteam
+
+peek-deepeval:
+	uv run python -m redteam.peek deepeval
