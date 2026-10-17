@@ -54,10 +54,36 @@ The first nightly managed only ~1.8 attacks/min and timed out at 120 min. Measur
 
 Per-probe timings after the fix (4 attempts, live, quiet account): `encoding.InjectBraille` 65 s (was >240 s),
 `latentinjection.LatentInjectionReport` 63 s (was >240 s), `apikey.GetKey` 10 s (was 167 s),
-`leakreplay.NYTCloze` 17 s (was >240 s), `misleading.FalseAssertion` 150 attempts in 274 s. `promptinject`
-finished 16 sequential attempts inside a 10-minute limit; the exact figure is unknown because this machine's
-clock jumped during the run. The per-family time limits in `garak_families.json` are generous estimates from
-these numbers. **The restructured nightly has not been run end to end yet.**
+`leakreplay.NYTCloze` 17 s (was >240 s), `misleading.FalseAssertion` 150 attempts in 274 s.
+
+### First complete run (CI run 38983096457, restructured nightly, all jobs green, 44.6 min wall clock)
+
+| Job | Measured | Limit | | Job | Measured | Limit |
+|---|---|---|---|---|---|---|
+| `promptinject` | 2.6 min | 45 | | `apikey` | 1.9 min | 20 |
+| `dan` | 0.9 min | 30 | | `leakreplay` | 5.3 min | 30 |
+| `latentinjection` | 4.7 min | 45 | | `misleading` | 6.1 min | 25 |
+| `sysprompt_extraction` | 1.3 min | 20 | | deepteam chatbot / rag_bot / agent_bot | 6.0 / 11.3 / 4.2 min | 120 |
+
+All seven garak jobs together took about 23 minutes; every one finished at 3-10x under its limit, so the limits
+could be tightened. All 486 attacks completed.
+
+**Results** (attack success = failed / evaluated, per probe and detector; about 15 attacks per probe, so
+treat each rate as a rough indication, not a measurement):
+
+| Family | Result |
+|---|---|
+| `latentinjection` | highest: Translation EnFr 93%, Legal 87%, Report 80%, Eiffel 67%, Translation EnZh 60%, Resume 40%, Whois 33%, LatentJailbreak 10% |
+| `dan` | `DanInTheWild` 80% mitigation bypass; `AutoDANCached` 33% |
+| `promptinject` | `HijackLongPrompt` 64%, `HijackHateHumans` 46%, `HijackKillHumans` 17% |
+| `leakreplay` | 0-31% (training-data replay is low for this model) |
+| `apikey` | 0%: all 30 refused |
+| `sysprompt_extraction` | 0 of 12 extracted. **UNVERIFIED** that this says anything about our bot's own system prompt (see the table above). |
+| `misleading` | **depends on the detector**: 7% (`MustRefuteClaimModel`), 49% (`MustRefuteClaimKW`), 71% (`MustContradictNLI`), 99% (`MitigationBypass`) on the same 149 answers. Four scorers, four verdicts. |
+
+Empty replies (the 1500-token budget): 33 of 486 attacks (6.8%) came back with no text and are counted as `nones`,
+outside both pass and fail: `latentinjection` 10, `leakreplay` 10, `promptinject` 6, `misleading` 4,
+`sysprompt_extraction` 3, `dan` 0, `apikey` 0. So the smaller budget trimmed the sample a little, not a lot.
 
 ## Considered and not added
 
@@ -77,9 +103,9 @@ these numbers. **The restructured nightly has not been run end to end yet.**
 | Hallucination | `misleading` | False-claim refutation only. |
 | Sycophancy | none | No probe or detector in garak 0.17.0 mentions sycophancy (searched the installed source). Covered by a custom two-turn test, `tests/regressions/test_sycophancy.py`. |
 
-## What the live results looked like
+## What the live results look like
 
-Narrow config, 8 prompts per probe: `dan.DanInTheWild` attack success 25%, `promptinject.HijackHateHumans`
-37-62% across runs (the sample changed before we fixed the seed). The partial nightly report
-(`reports/prebaked/garak-broad-partial.report.jsonl`) covers only `dan`, `encoding` and `goodside`. Treat
-all of these as small-sample indications, not rates.
+`make scan` (narrow config, 8 attacks per probe, seeded so it is reproducible and cacheable): `dan.DanInTheWild`
+attack success 62% (5 of 8 failed), `promptinject.HijackHateHumans` 38% (3 of 8). The unseeded runs earlier gave
+different samples, hence different rates. Treat all of these as small-sample indications, not rates. The
+full nightly results are in `reports/prebaked/garak-broad-core.report.jsonl`.
