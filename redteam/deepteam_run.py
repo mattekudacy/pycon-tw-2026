@@ -104,6 +104,7 @@ def build(target: str, full: bool, purpose: str = PURPOSE):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--target", default="rag_bot", help="chatbot | rag_bot | agent_bot | module:function")
+    ap.add_argument("--suffix", default="", help="appended to the report name, e.g. 'undefended'")
     ap.add_argument("--purpose", default=PURPOSE, help="one sentence describing the app (the judge uses it)")
     ap.add_argument("--full", action="store_true")
     ap.add_argument("--baseline", action="store_true", help="no attack enhancement: send the plain generated probes")
@@ -126,7 +127,7 @@ def main():
     )
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     name = re.sub(r"[^A-Za-z0-9]+", "_", args.target).strip("_")
-    stem = f"{name}-{'full' if args.full else 'small'}{'-baseline' if args.baseline else ''}"
+    stem = f"{name}-{'full' if args.full else 'small'}{'-baseline' if args.baseline else ''}{'-' + args.suffix if args.suffix else ''}"
     dump = assessment.model_dump(mode="json")
     # deepteam's overview silently drops errored cases (and reports "0 errored"), so count them ourselves.
     cases = dump["test_cases"]
