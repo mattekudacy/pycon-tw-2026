@@ -101,6 +101,7 @@ calibration set: use a deterministic check for the secrets you know about.
 | `make scan` | garak, narrow config, against the chatbot | 43 s (first ever: 308 s) | ~7 s |
 | `make attack` | deepteam, small batch, against `rag_bot` | ~4 min | ~3 s |
 | `make attack-before-fix` | the same attack with the defenses off (shows the finding) | ~1 min | ~3 s |
+| `make deepeval-run` | deepeval's own results table: one answer, three metrics, defenses off (faithfulness and relevancy pass, the security metric fails). Needs a terminal 130+ columns wide. | ~15 s | ~4 s |
 | `make peek-garak` / `peek-deepteam` / `peek-deepeval` | 30-second look inside each tool's run, no key needed. garak: the attacks the last `make scan` sent, the bot's replies and the detector verdicts; deepteam: what it is told to attack plus one finding with the judge's reasoning (needs `make attack-before-fix` first); deepeval: the 5-line test and the assertion it raises. | n/a | 1-4 s |
 | `make regress-fast` | deterministic security regressions, printed as a PASS/FAIL table | ~1 min | ~5 s |
 | `make compare` | a SECURITY failure and a QUALITY failure side by side (defenses off) | ~1 min | ~3 s |
