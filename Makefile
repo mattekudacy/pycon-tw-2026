@@ -5,7 +5,7 @@ export DEEPTEAM_TELEMETRY_OPT_OUT := YES
 export DEEPEVAL_TELEMETRY_OPT_OUT := YES
 export XDG_DATA_HOME := $(CURDIR)/reports
 
-.PHONY: install test scan scan-broad attack attack-before-fix attack-full regress regress-fast agent-test calibrate report report-prebaked compare peek-garak peek-deepteam peek-deepeval deepeval-run
+.PHONY: install test scan scan-broad attack attack-before-fix attack-full regress regress-fast agent-test calibrate report report-prebaked compare peek-garak peek-deepteam peek-deepeval deepeval-run regress-before-fix
 
 install:
 	uv sync
@@ -44,6 +44,11 @@ attack-full:
 # faithfulness/relevancy (LLM-judged; ~2.5 min cold, seconds once the cache is warm).
 regress-fast:
 	uv run python -m redteam.regress_fast
+
+# The red run: the same security regressions with the defenses off (the before-fix behaviour of rag_bot), so the
+# four injection tests FAIL. The exit code is ignored on purpose: failing is the point of this beat.
+regress-before-fix:
+	RAG_DEFENSES=none uv run python -m redteam.regress_fast || true
 
 regress:
 	uv run pytest tests/regressions -q -p no:cacheprovider
