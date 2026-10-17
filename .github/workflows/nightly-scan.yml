@@ -81,7 +81,7 @@ jobs:
 
   deepteam:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 30 # measured 4-11 min per target in the first complete nightly
     strategy:
       fail-fast: false
       max-parallel: 1
