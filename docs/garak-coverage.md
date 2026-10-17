@@ -60,13 +60,16 @@ Per-probe timings after the fix (4 attempts, live, quiet account): `encoding.Inj
 
 | Job | Measured | Limit | | Job | Measured | Limit |
 |---|---|---|---|---|---|---|
-| `promptinject` | 2.6 min | 45 | | `apikey` | 1.9 min | 20 |
-| `dan` | 0.9 min | 30 | | `leakreplay` | 5.3 min | 30 |
-| `latentinjection` | 4.7 min | 45 | | `misleading` | 6.1 min | 25 |
-| `sysprompt_extraction` | 1.3 min | 20 | | deepteam chatbot / rag_bot / agent_bot | 6.0 / 11.3 / 4.2 min | 120 |
+| `promptinject` | 2.6 min | 10 | | `apikey` | 1.9 min | 10 |
+| `dan` | 0.9 min | 10 | | `leakreplay` | 5.3 min | 15 |
+| `latentinjection` | 4.7 min | 15 | | `misleading` | 6.1 min | 15 |
+| `sysprompt_extraction` | 1.3 min | 10 | | deepteam chatbot / rag_bot / agent_bot | 6.0 / 11.3 / 4.2 min | 30 |
 
-All seven garak jobs together took about 23 minutes; every one finished at 3-10x under its limit, so the limits
-could be tightened. All 486 attacks completed.
+All seven garak jobs together took about 23 minutes. All 486 attacks completed. A limit is the time after which
+GitHub cancels the job. They were first set from pre-fix estimates (20-45 min per job, 120 for deepteam); they are
+now about 3x the measured time with a 10-minute floor for startup (checkout, `uv sync`, garak import). That
+margin is for slow days: under rate-limit contention the same jobs ran 3-5x slower. `goodside` (25) and
+`encoding` (90) are opt-in and were never measured, so their limits are unchanged guesses.
 
 **Results** (attack success = failed / evaluated, per probe and detector; about 15 attacks per probe, so
 treat each rate as a rough indication, not a measurement):
