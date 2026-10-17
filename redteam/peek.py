@@ -1,10 +1,11 @@
 """Three short "look inside the library" commands for the live demo. No API key or network needed.
 
-    make peek-garak      the menu of probes garak ships, and how our bot plugs in
+    make peek-garak      what the last `make scan` actually did: attacks sent, bot replies, verdicts
     make peek-deepteam   what deepteam is told to attack, and one finding with the judge's reasoning
     make peek-deepeval   the 5-line test, and the assertion it raises when the bot misbehaves
 
-peek-deepteam needs `make attack-before-fix` to have been run once (it reads that report).
+peek-garak needs `make scan` to have been run (it reads that report); `python -m redteam.peek garak-about`
+shows the probe menu instead. peek-deepteam needs `make attack-before-fix` to have been run once.
 It prints the answer and the judge's reason but not the generated attack text.
 """
 import ast
@@ -39,7 +40,53 @@ def source_of(path: Path, name: str) -> str:
     return "\n".join(text.splitlines()[first - 1 : node.end_lineno])
 
 
+GARAK_REPORT = ROOT / "reports" / "garak" / "runs" / "narrow.report.jsonl"
+
+
+def text_of(x) -> str:
+    """garak stores message content either as a string or as {"text": ...}."""
+    if isinstance(x, dict):
+        x = x.get("text")
+    return "" if x is None else str(x)
+
+
+def worked(attempt: dict) -> bool:
+    """A detector score of 1 means the attack worked (the bot did what the attacker wanted)."""
+    return any(s is not None and s >= 0.5 for scores in attempt["detector_results"].values() for s in scores)
+
+
 def garak() -> int:
+    if not GARAK_REPORT.exists():
+        print("No garak run yet. Run `make scan` first (it writes reports/garak/runs/narrow.report.jsonl).")
+        return 2
+    rows = [json.loads(line) for line in GARAK_REPORT.read_text().splitlines() if line.strip()]
+    attempts = [r for r in rows if r.get("entry_type") == "attempt" and r.get("status") == 2]
+    by_probe: dict[str, list[dict]] = {}
+    for a in sorted(attempts, key=lambda a: (a["probe_classname"], a.get("seq", 0), a["uuid"])):
+        by_probe.setdefault(a["probe_classname"], []).append(a)
+    print(f"garak run: {len(attempts)} attacks across {len(by_probe)} probes (reports/garak/runs/narrow.report.jsonl)\n")
+    print(f"  {'probe':34} {'attacks':>8}   attack worked")
+    for probe, items in by_probe.items():
+        n = sum(worked(a) for a in items)
+        print(f"  {probe:34} {len(items):>8}   {n} ({n / len(items):.0%})")
+    for probe, items in by_probe.items():
+        for label, pick in (("WORKED", [a for a in items if worked(a)]), ("did NOT work", [a for a in items if not worked(a)])):
+            if not pick:
+                continue
+            a = pick[0]
+            prompt = text_of(a["prompt"]["turns"][0]["content"])
+            sent = (f'"{shorten(prompt, 105)}"' if len(prompt) <= 600
+                    else f"[{len(prompt):,}-character jailbreak prompt, not shown]")
+            reply = text_of(a["outputs"][0]) if a["outputs"] else ""
+            detector, scores = next(iter(a["detector_results"].items()))
+            print(f"\n{probe}: one attack that {label}")
+            print(f"  garak sent : {sent}")
+            print(f"  bot replied: " + (f'"{shorten(reply, 105)}"' if reply else "(no reply)"))
+            print(f"  detector   : {detector} = {scores[0]}  (1 = attack worked, 0 = bot held)")
+    return 0
+
+
+def garak_about() -> int:
     out = ANSI.sub("", subprocess.run([sys.executable, "-m", "garak", "--list_probes"], capture_output=True, text=True).stdout)
     # 💤 marks probes garak does not run by default (the slow "Full" variants); count only the active ones
     names = [m.group(1) for line in out.splitlines() if "💤" not in line and (m := re.match(r"probes: (\S+)", line))]
@@ -104,7 +151,7 @@ def deepeval() -> int:
 
 
 if __name__ == "__main__":
-    cmds = {"garak": garak, "deepteam": deepteam, "deepeval": deepeval}
+    cmds = {"garak": garak, "garak-about": garak_about, "deepteam": deepteam, "deepeval": deepeval}
     if len(sys.argv) != 2 or sys.argv[1] not in cmds:
         sys.exit(f"usage: python -m redteam.peek [{'|'.join(cmds)}]")
     sys.exit(cmds[sys.argv[1]]())
