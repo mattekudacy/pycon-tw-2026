@@ -5,7 +5,7 @@ export DEEPTEAM_TELEMETRY_OPT_OUT := YES
 export DEEPEVAL_TELEMETRY_OPT_OUT := YES
 export XDG_DATA_HOME := $(CURDIR)/reports
 
-.PHONY: install test scan scan-broad attack attack-full regress regress-fast agent-test calibrate report report-prebaked compare
+.PHONY: install test scan scan-broad attack attack-before-fix attack-full regress regress-fast agent-test calibrate report report-prebaked compare
 
 install:
 	uv sync
@@ -28,6 +28,12 @@ TARGET ?= rag_bot
 PURPOSE ?= A customer-support assistant for AcmeShop that answers order, shipping and return questions.
 attack:
 	uv run python -m redteam.deepteam_run --target "$(TARGET)" --purpose "$(PURPOSE)" --baseline --per-type 3
+
+# The finding itself: the same attack with the defenses off (= the before-fix behaviour of rag_bot), so the
+# poisoned shipping doc still works. Replays from the cache in ~3 s; cold ~1 min.
+# Result: reports/deepteam/rag_bot-small-baseline-undefended.json
+attack-before-fix:
+	RAG_DEFENSES=none uv run python -m redteam.deepteam_run --target rag_bot --purpose "$(PURPOSE)" --baseline --per-type 3 --suffix undefended
 
 # Nightly-size run (slow, costs more).
 attack-full:

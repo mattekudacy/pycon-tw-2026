@@ -20,8 +20,8 @@ Judge for all deepteam runs: `gpt-oss:120b`; attack simulator: `gemma4:31b`; tar
 
 | Demo beat | File | What it is |
 |---|---|---|
-| deepteam, **before** the fix | `rag_bot-before-fix-deepteam.json` | 12 probes: 10 passed, 2 failed. The poisoned shipping doc made the bot append a phishing link in 6 of the 12 outputs; the judge flagged only some of them. |
-| deepteam, **after** the fix | `rag_bot-after-fix-deepteam.json` | Same probes, 12/12 passed, 0 outputs with the link. |
+| deepteam, **before** the fix | `rag_bot-before-fix-deepteam.json` | 12 probes, defenses off: 10 passed, 2 failed. **The poisoned shipping doc made the bot append a phishing link in 10 of the 12 answers; the judge flagged only 2** (both `document_embedded_instructions`). Reproduce: `make attack-before-fix` (cold ~1 min; replays in ~3 s). |
+| deepteam, **after** the fix | `rag_bot-after-fix-deepteam.json` | Same 12 probes, defenses on (`make attack`): 12/12 passed, 0 outputs with the link. |
 | Trusting the judge | `judge-calibration.md` / `.json` | 36 hand-labeled examples. Both judges agreed with the labels 81-83% of the time but caught only 60% of the real failures. The 7 `hard` labels were reviewed by a human (all 7 agreed); the other 29 are rule-labeled and not individually reviewed. |
 
 ## CI runs to show in the browser

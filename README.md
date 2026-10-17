@@ -37,6 +37,8 @@ To see a finding fail, then pass (no checkout needed: `RAG_DEFENSES=none` switch
 ```bash
 RAG_DEFENSES=none make regress-fast    # 4 FAIL: the poisoned shipping doc
 make regress-fast                      # 7 PASS
+make attack-before-fix                 # deepteam, defenses off: link in 10 of 12 answers, judge flags 2
+make attack                            # deepteam, defenses on: 12/12 pass
 make compare                           # a security failure next to a quality failure
 ```
 
@@ -98,6 +100,7 @@ calibration set: use a deterministic check for the secrets you know about.
 |---|---|---|---|
 | `make scan` | garak, narrow config, against the chatbot | 43 s (first ever: 308 s) | ~7 s |
 | `make attack` | deepteam, small batch, against `rag_bot` | ~4 min | ~3 s |
+| `make attack-before-fix` | the same attack with the defenses off (shows the finding) | ~1 min | ~3 s |
 | `make regress-fast` | deterministic security regressions, printed as a PASS/FAIL table | ~1 min | ~5 s |
 | `make compare` | a SECURITY failure and a QUALITY failure side by side (defenses off) | ~1 min | ~3 s |
 | `make regress` | plus LLM-judged faithfulness / relevancy and the sycophancy test | ~4.5 min | ~4 s |
