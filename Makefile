@@ -5,7 +5,7 @@ export DEEPTEAM_TELEMETRY_OPT_OUT := YES
 export DEEPEVAL_TELEMETRY_OPT_OUT := YES
 export XDG_DATA_HOME := $(CURDIR)/reports
 
-.PHONY: install test scan scan-broad attack attack-before-fix attack-full regress regress-fast agent-test calibrate report report-prebaked compare peek-garak peek-deepteam peek-deepeval
+.PHONY: install test scan scan-broad attack attack-before-fix attack-full regress regress-fast agent-test calibrate report report-prebaked compare peek-garak peek-deepteam peek-deepeval deepeval-run
 
 install:
 	uv sync
@@ -79,3 +79,9 @@ peek-deepteam:
 
 peek-deepeval:
 	uv run python -m redteam.peek deepeval
+
+# deepeval's own results table for ONE answer and three metrics, defenses off: the two quality metrics
+# (faithfulness, answer relevancy) PASS because the answer matches its documents, while the security metric
+# FAILS. Use a terminal at least 130 columns wide. Exit code is ignored: the failure is the point.
+deepeval-run:
+	RAG_DEFENSES=none uv run deepeval test run tests/regressions/test_rag_regressions.py -k "(injection and shipping and time) or (shipping and (faithful or relevant))" --tb=no -q -p no:cacheprovider || true
